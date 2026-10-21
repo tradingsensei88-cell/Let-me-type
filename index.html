@@ -1,0 +1,2525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KEYSTROKE — Tactile 3D Mechanical Typing Experience</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root {
+      --bg-orange: #F36A16;
+      --bg-orange-deep: #C9470C;
+      --ivory: #F5F0DE;
+      --cream: #E7DEC8;
+      --outline: #292824;
+      --neutral: #D8CFC0;
+      --white: #FFFDF5;
+      --accent-green: #2B8A3E;
+      --error-red: #D92B2B;
+      --shadow-hard: 0 5px 0 #292824;
+      --shadow-hard-sm: 0 3px 0 #292824;
+      --radius-lg: 20px;
+      --radius-md: 13px;
+      --radius-sm: 9px;
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    [data-theme="espresso"] {
+      --bg-orange: #231F1D;
+      --bg-orange-deep: #141110;
+      --ivory: #F5F0DE;
+      --cream: #DED4BE;
+      --outline: #11100F;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--bg-orange);
+      color: var(--white);
+      font-family: var(--font-sans);
+      overflow-x: hidden;
+      transition: background-color 0.35s ease;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Subtle tactile noise overlay matching reference illustration */
+    .grain-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.065;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    .app-shell {
+      position: relative;
+      z-index: 2;
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 1.1rem 1.75rem 1.5rem;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    /* HEADER */
+    .site-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--white);
+      user-select: none;
+    }
+
+    .brand-cap {
+      width: 42px;
+      height: 42px;
+      background: var(--ivory);
+      color: var(--outline);
+      border: 3px solid var(--outline);
+      border-radius: 12px;
+      box-shadow: 0 4px 0 var(--outline);
+      display: grid;
+      place-items: center;
+      font-family: var(--font-sans);
+      font-weight: 800;
+      font-size: 1.15rem;
+      position: relative;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    .brand-cap::after {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border-radius: 7px;
+      border: 1.5px solid rgba(41, 40, 36, 0.14);
+      pointer-events: none;
+    }
+
+    .brand:hover .brand-cap {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 var(--outline);
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.45rem;
+      letter-spacing: -0.02em;
+      color: var(--white);
+      text-shadow: 0 2px 0 var(--outline);
+    }
+
+    .brand-badge {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: var(--outline);
+      color: var(--ivory);
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      margin-left: 0.2rem;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+    }
+
+    .pill-group {
+      display: inline-flex;
+      align-items: center;
+      background: var(--ivory);
+      border: 2.5px solid var(--outline);
+      border-radius: var(--radius-md);
+      padding: 0.22rem;
+      box-shadow: var(--shadow-hard-sm);
+      color: var(--outline);
+    }
+
+    .pill-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--outline);
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 0.83rem;
+      padding: 0.4rem 0.72rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.14s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .pill-btn:hover {
+      background: rgba(41, 40, 36, 0.08);
+    }
+
+    .pill-btn:focus-visible,
+    .tactile-btn:focus-visible {
+      outline: 3px solid var(--white);
+      outline-offset: 2px;
+    }
+
+    .pill-btn.active {
+      background: var(--bg-orange);
+      color: var(--white);
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.2);
+    }
+
+    .tactile-btn {
+      appearance: none;
+      background: var(--ivory);
+      color: var(--outline);
+      border: 2.5px solid var(--outline);
+      border-radius: var(--radius-md);
+      padding: 0.52rem 0.88rem;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 0.84rem;
+      cursor: pointer;
+      box-shadow: var(--shadow-hard-sm);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
+      user-select: none;
+    }
+
+    .tactile-btn:hover {
+      background: var(--white);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 0 var(--outline);
+    }
+
+    .tactile-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 var(--outline);
+    }
+
+    .tactile-btn.orange {
+      background: var(--bg-orange);
+      color: var(--white);
+    }
+
+    .volume-popover {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      background: var(--ivory);
+      color: var(--outline);
+      border: 2.5px solid var(--outline);
+      border-radius: var(--radius-md);
+      padding: 0.38rem 0.75rem;
+      box-shadow: var(--shadow-hard-sm);
+    }
+
+    .sound-toggle-btn {
+      background: none;
+      border: none;
+      color: var(--outline);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      padding: 0.15rem;
+      border-radius: 6px;
+    }
+
+    .sound-toggle-btn:hover {
+      background: rgba(41, 40, 36, 0.1);
+    }
+
+    .volume-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 68px;
+      height: 6px;
+      background: var(--neutral);
+      border-radius: 99px;
+      border: 1.5px solid var(--outline);
+      outline: none;
+      cursor: pointer;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--bg-orange);
+      border: 2px solid var(--outline);
+      cursor: pointer;
+    }
+
+    /* HERO & TYPING DECK */
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.7rem;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .hero-head {
+      text-align: center;
+      max-width: 680px;
+      margin-bottom: 0.1rem;
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(1.65rem, 2.8vw, 2.35rem);
+      font-weight: 800;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      color: var(--white);
+      text-shadow: 0 3px 0 var(--outline);
+    }
+
+    .hero-sub {
+      font-size: 0.92rem;
+      color: var(--ivory);
+      opacity: 0.95;
+      margin-top: 0.25rem;
+      font-weight: 600;
+    }
+
+    /* TYPING CONSOLE */
+    .typing-deck {
+      width: 100%;
+      max-width: 980px;
+      background: var(--ivory);
+      color: var(--outline);
+      border: 3px solid var(--outline);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 7px 0 var(--outline), 0 18px 30px rgba(145, 42, 0, 0.32);
+      padding: 1rem 1.35rem 1.15rem;
+      position: relative;
+      transition: transform 0.2s ease;
+    }
+
+    .deck-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.85rem;
+      padding-bottom: 0.75rem;
+      margin-bottom: 0.75rem;
+      border-bottom: 2px dashed rgba(41, 40, 36, 0.16);
+      flex-wrap: wrap;
+    }
+
+    .metrics-strip {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .metric-item {
+      display: flex;
+      align-items: baseline;
+      gap: 0.4rem;
+    }
+
+    .metric-label {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(41, 40, 36, 0.62);
+    }
+
+    .metric-val {
+      font-family: var(--font-mono);
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--outline);
+    }
+
+    .metric-val.highlight {
+      color: var(--bg-orange-deep);
+    }
+
+    .deck-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .mode-chip {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.28rem 0.65rem;
+      border-radius: 8px;
+      background: var(--cream);
+      border: 2px solid var(--outline);
+      cursor: pointer;
+      color: var(--outline);
+      transition: all 0.12s ease;
+    }
+
+    .mode-chip:hover {
+      background: var(--white);
+    }
+
+    .next-key-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.76rem;
+      font-weight: 700;
+      background: var(--cream);
+      border: 2px solid var(--outline);
+      padding: 0.25rem 0.6rem;
+      border-radius: 8px;
+    }
+
+    .next-key-cap {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      background: var(--bg-orange);
+      color: var(--white);
+      padding: 0.08rem 0.42rem;
+      border-radius: 5px;
+      border: 1.5px solid var(--outline);
+      font-size: 0.78rem;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    /* PASSAGE DISPLAY */
+    .passage-viewport {
+      position: relative;
+      height: 5.1rem;
+      overflow: hidden;
+      user-select: none;
+      cursor: text;
+      padding: 0.15rem 0.1rem;
+    }
+
+    .passage-words {
+      font-family: var(--font-mono);
+      font-size: clamp(1.08rem, 1.55vw, 1.32rem);
+      line-height: 1.7;
+      letter-spacing: -0.01em;
+      color: rgba(41, 40, 36, 0.38);
+      transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+      word-break: break-word;
+    }
+
+    .char {
+      position: relative;
+      border-radius: 4px;
+      transition: color 0.06s ease, background-color 0.06s ease;
+    }
+
+    .char.correct {
+      color: var(--outline);
+    }
+
+    .char.incorrect {
+      color: var(--error-red);
+      background-color: rgba(217, 43, 43, 0.14);
+      text-decoration: underline wavy var(--error-red) 1.5px;
+      text-underline-offset: 4px;
+    }
+
+    .char.current {
+      color: var(--outline);
+    }
+
+    .char.current::before {
+      content: '';
+      position: absolute;
+      left: -1px;
+      top: 10%;
+      bottom: 10%;
+      width: 3px;
+      background: var(--bg-orange);
+      border-radius: 2px;
+      animation: caretPulse 1s infinite;
+    }
+
+    @keyframes caretPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    /* Progress Bar inside deck */
+    .progress-track {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background: rgba(41, 40, 36, 0.1);
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--bg-orange);
+      transition: width 0.18s linear;
+    }
+
+    /* 3D STAGE CONTAINER */
+    .stage-wrapper {
+      position: relative;
+      width: 100%;
+      height: clamp(310px, 47vh, 470px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: -0.25rem 0;
+    }
+
+    #keyboard-canvas-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      cursor: grab;
+      touch-action: manipulation;
+    }
+
+    #keyboard-canvas-container:active {
+      cursor: grabbing;
+    }
+
+    .stage-Floating-hint {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(41, 40, 36, 0.88);
+      color: var(--ivory);
+      font-size: 0.76rem;
+      font-weight: 700;
+      padding: 0.32rem 0.8rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--ivory);
+      pointer-events: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: opacity 0.3s ease;
+    }
+
+    .touch-banner {
+      display: none;
+      background: var(--ivory);
+      color: var(--outline);
+      border: 2.5px solid var(--outline);
+      border-radius: var(--radius-md);
+      padding: 0.5rem 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-align: center;
+      max-width: 540px;
+      box-shadow: var(--shadow-hard-sm);
+    }
+
+    @media (pointer: coarse) {
+      .touch-banner {
+        display: block;
+      }
+    }
+
+    /* FALLBACK 2D KEYBOARD (if WebGL fails) */
+    .fallback-keyboard {
+      display: none;
+      background: var(--cream);
+      border: 4px solid var(--outline);
+      border-radius: 22px;
+      padding: 1rem;
+      box-shadow: 0 10px 0 var(--outline);
+      max-width: 820px;
+      width: 100%;
+      gap: 0.4rem;
+      flex-direction: column;
+    }
+
+    .fallback-row {
+      display: flex;
+      gap: 0.38rem;
+      justify-content: center;
+    }
+
+    .fallback-key {
+      background: var(--ivory);
+      color: var(--outline);
+      border: 2.5px solid var(--outline);
+      border-radius: 9px;
+      box-shadow: 0 4px 0 var(--outline);
+      padding: 0.55rem 0.4rem;
+      min-width: 42px;
+      text-align: center;
+      font-family: var(--font-sans);
+      font-weight: 800;
+      font-size: 0.78rem;
+      user-select: none;
+      transition: transform 0.06s ease, box-shadow 0.06s ease;
+    }
+
+    .fallback-key.orange {
+      background: var(--bg-orange);
+      color: var(--white);
+    }
+
+    .fallback-key.pressed {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 var(--outline);
+    }
+
+    /* FOOTER */
+    .site-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--ivory);
+      flex-wrap: wrap;
+      padding-top: 0.2rem;
+    }
+
+    .shortcut-hints {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      flex-wrap: wrap;
+    }
+
+    .kbd-tag {
+      display: inline-block;
+      background: var(--ivory);
+      color: var(--outline);
+      border: 2px solid var(--outline);
+      border-radius: 6px;
+      padding: 0.1rem 0.42rem;
+      font-family: var(--font-mono);
+      font-size: 0.73rem;
+      font-weight: 700;
+      box-shadow: 0 2px 0 var(--outline);
+      margin-right: 0.25rem;
+    }
+
+    /* MODAL OVERLAYS (Results & About) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(25, 22, 19, 0.72);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: var(--ivory);
+      color: var(--outline);
+      border: 3.5px solid var(--outline);
+      border-radius: 24px;
+      box-shadow: 0 10px 0 var(--outline), 0 24px 48px rgba(0,0,0,0.4);
+      max-width: 640px;
+      width: 100%;
+      padding: 1.75rem 2rem;
+      transform: translateY(14px) scale(0.98);
+      transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .modal-backdrop.open .modal-card {
+      transform: translateY(0) scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 1.85rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .modal-subtitle {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: rgba(41, 40, 36, 0.7);
+      margin-top: 0.2rem;
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .stat-box {
+      background: var(--cream);
+      border: 2.5px solid var(--outline);
+      border-radius: 14px;
+      padding: 0.85rem 0.75rem;
+      text-align: center;
+      box-shadow: 0 3px 0 var(--outline);
+    }
+
+    .stat-box.primary {
+      background: var(--bg-orange);
+      color: var(--white);
+    }
+
+    .stat-box-label {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.85;
+    }
+
+    .stat-box-val {
+      font-family: var(--font-mono);
+      font-size: 1.85rem;
+      font-weight: 800;
+      margin-top: 0.2rem;
+    }
+
+    .history-section {
+      background: var(--cream);
+      border: 2px solid var(--outline);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.35rem;
+    }
+
+    .history-title {
+      font-size: 0.74rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 0.45rem;
+      color: rgba(41, 40, 36, 0.7);
+    }
+
+    .history-list {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    .history-pill {
+      background: var(--ivory);
+      border: 1.5px solid var(--outline);
+      border-radius: 7px;
+      padding: 0.2rem 0.55rem;
+      font-weight: 700;
+    }
+
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    /* Hidden accessible input for mobile/IME support */
+    #hidden-typing-input {
+      position: fixed;
+      opacity: 0;
+      pointer-events: none;
+      left: -9999px;
+      top: 0;
+    }
+
+    @media (max-width: 820px) {
+      .app-shell {
+        padding: 0.85rem 1rem 1.1rem;
+      }
+      .results-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .stage-wrapper {
+        height: 290px;
+      }
+      .typing-deck {
+        padding: 0.85rem 1rem;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .brand-title {
+        font-size: 1.2rem;
+      }
+      .brand-badge {
+        display: none;
+      }
+      .stage-wrapper {
+        height: 245px;
+      }
+      .passage-viewport {
+        height: 5.5rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="grain-overlay" aria-hidden="true"></div>
+  <input type="text" id="hidden-typing-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Typing test input" />
+
+  <div class="app-shell">
+    <!-- TOP NAVIGATION -->
+    <header class="site-header">
+      <a href="#" class="brand" id="brand-reset" aria-label="KEYSTROKE Home">
+        <div class="brand-cap">K</div>
+        <span class="brand-title">KEYSTROKE</span>
+        <span class="brand-badge">65% Studio</span>
+      </a>
+
+      <div class="header-controls">
+        <!-- Duration Selector -->
+        <div class="pill-group" role="group" aria-label="Test Duration">
+          <button type="button" class="pill-btn duration-btn" data-duration="15">15s</button>
+          <button type="button" class="pill-btn duration-btn active" data-duration="30">30s</button>
+          <button type="button" class="pill-btn duration-btn" data-duration="60">60s</button>
+          <button type="button" class="pill-btn duration-btn" data-duration="120">120s</button>
+        </div>
+
+        <!-- Sound & Volume -->
+        <div class="volume-popover" aria-label="Mechanical Switch Audio Controls">
+          <button type="button" class="sound-toggle-btn" id="sound-toggle" aria-label="Toggle mechanical keyboard sound" title="Toggle Sound">
+            <svg id="sound-icon-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+            </svg>
+            <svg id="sound-icon-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <line x1="23" y1="9" x2="17" y2="15"></line>
+              <line x1="17" y1="9" x2="23" y2="15"></line>
+            </svg>
+          </button>
+          <input type="range" id="volume-slider" class="volume-slider" min="0" max="1" step="0.05" value="0.7" aria-label="Switch sound volume" />
+        </div>
+
+        <!-- Theme Toggle -->
+        <button type="button" class="tactile-btn" id="theme-toggle" aria-label="Toggle studio color theme">
+          <span id="theme-label">Studio Orange</span>
+        </button>
+
+        <!-- About Modal Trigger -->
+        <button type="button" class="tactile-btn" id="about-btn" aria-label="About Keystroke">
+          About
+        </button>
+      </div>
+    </header>
+
+    <!-- CENTRAL WORKSPACE -->
+    <main class="workspace">
+      <div class="hero-head">
+        <h1 class="hero-title">Feel every keystroke.</h1>
+        <p class="hero-sub">Start typing on your physical keyboard—or click any 3D keycap—to test your rhythm.</p>
+      </div>
+
+      <div class="touch-banner" role="status">
+        Physical keyboard recommended for accurate WPM benchmarking. Tap the passage or 3D keys below to try tactile mode.
+      </div>
+
+      <!-- TYPING PASSAGE DECK -->
+      <section class="typing-deck" id="typing-deck" aria-label="Typing Test Area">
+        <div class="deck-topbar">
+          <div class="metrics-strip">
+            <div class="metric-item">
+              <span class="metric-label">Time</span>
+              <span class="metric-val highlight" id="live-timer">30s</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">WPM</span>
+              <span class="metric-val" id="live-wpm">0</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Accuracy</span>
+              <span class="metric-val" id="live-acc">100%</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Errors</span>
+              <span class="metric-val" id="live-errors">0</span>
+            </div>
+          </div>
+
+          <div class="deck-actions">
+            <div class="next-key-badge" title="Next target key highlighted on the 3D board">
+              <span>Next</span>
+              <span class="next-key-cap" id="next-key-indicator">T</span>
+            </div>
+            <button type="button" class="mode-chip" id="passage-next-btn" title="Load a new passage">New Passage</button>
+            <button type="button" class="mode-chip" id="restart-btn" title="Restart test (Tab + Enter)">Restart ↻</button>
+          </div>
+        </div>
+
+        <div class="passage-viewport" id="passage-viewport" tabindex="0" role="region" aria-label="Passage text to type">
+          <div class="passage-words" id="passage-words"></div>
+        </div>
+
+        <div class="progress-track" aria-hidden="true">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </section>
+
+      <!-- 3D MECHANICAL KEYBOARD HERO STAGE -->
+      <section class="stage-wrapper" aria-label="Interactive 3D Mechanical Keyboard">
+        <div id="keyboard-canvas-container"></div>
+        <div class="fallback-keyboard" id="fallback-keyboard" aria-label="2D Fallback Keyboard"></div>
+        <div class="stage-Floating-hint" id="stage-hint">
+          <span>Type anywhere • Drag to subtly orbit • Turn the front-left knob for switch pitch</span>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="site-footer">
+      <div class="shortcut-hints">
+        <span><kbd class="kbd-tag">Tab</kbd> + <kbd class="kbd-tag">Enter</kbd> Quick Restart</span>
+        <span><kbd class="kbd-tag">Esc</kbd> Reset Passage</span>
+        <span><kbd class="kbd-tag">Click Keycaps</kbd> Test Acoustics</span>
+      </div>
+      <div>Crafted with procedural Three.js &amp; Web Audio synthesis</div>
+    </footer>
+  </div>
+
+  <!-- RESULTS MODAL -->
+  <div class="modal-backdrop" id="results-modal" role="dialog" aria-modal="true" aria-labelledby="results-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" id="results-title">Session Complete</h2>
+          <p class="modal-subtitle" id="results-message">Crisp rhythm and solid mechanical precision.</p>
+        </div>
+        <button type="button" class="tactile-btn" id="close-results-btn" aria-label="Close results">✕</button>
+      </div>
+
+      <div class="results-grid">
+        <div class="stat-box primary">
+          <div class="stat-box-label">Net WPM</div>
+          <div class="stat-box-val" id="res-wpm">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-label">Accuracy</div>
+          <div class="stat-box-val" id="res-acc">100%</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-label">Raw WPM</div>
+          <div class="stat-box-val" id="res-raw">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-label">Consistency</div>
+          <div class="stat-box-val" id="res-cons">98%</div>
+        </div>
+      </div>
+
+      <div class="history-section">
+        <div class="history-title">Breakdown &amp; Session History</div>
+        <div style="font-size:0.84rem; font-weight:600; margin-bottom:0.5rem;" id="res-chars-detail">
+          Characters: 0 correct / 0 errors
+        </div>
+        <div class="history-list" id="session-history-list">
+          <span class="history-pill">No previous runs yet</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="pill-group" aria-label="Change duration for next run">
+          <button type="button" class="pill-btn modal-dur-btn" data-duration="15">15s</button>
+          <button type="button" class="pill-btn modal-dur-btn active" data-duration="30">30s</button>
+          <button type="button" class="pill-btn modal-dur-btn" data-duration="60">60s</button>
+          <button type="button" class="pill-btn modal-dur-btn" data-duration="120">120s</button>
+        </div>
+        <button type="button" class="tactile-btn orange" id="try-again-btn">Try Again ↵</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABOUT MODAL -->
+  <div class="modal-backdrop" id="about-modal" role="dialog" aria-modal="true" aria-labelledby="about-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" id="about-title">About KEYSTROKE</h2>
+          <p class="modal-subtitle">A tactile 3D tribute to custom mechanical keyboards.</p>
+        </div>
+        <button type="button" class="tactile-btn" id="close-about-btn" aria-label="Close about dialog">✕</button>
+      </div>
+      <div style="font-size:0.93rem; line-height:1.65; display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1.4rem;">
+        <p>
+          Inspired by collectible industrial design and warm editorial illustration, <strong>KEYSTROKE</strong> pairs a procedural Three.js 3D mechanical keyboard with a real-time Web Audio switch synthesizer.
+        </p>
+        <p>
+          <strong>How it works:</strong> Every physical key press (`keydown` and `keyup` via `KeyboardEvent.code`) depresses the matching sculpted 3D keycap with spring physics, triggers a custom-filtered acoustic transient ("thock" for spacebar and modifiers, crisp "clack" for alphas), and measures your net WPM, accuracy, and rhythm consistency.
+        </p>
+        <p>
+          <strong>Interactive Knob:</strong> Click or drag the cream rotary encoder knob on the front-left side of the 3D keyboard case to shift the acoustic pitch profile of the switches.
+        </p>
+      </div>
+      <div class="modal-footer" style="justify-content:flex-end;">
+        <button type="button" class="tactile-btn orange" id="about-got-it-btn">Back to Typing</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* ==========================================================================
+         1. CURATED NATURAL TYPING PASSAGES
+         ========================================================================== */
+      const PASSAGES = [
+        "Tactile design lives in the small moments between intention and response. When a sculpted keycap yields under your fingertips with a warm, resonant click, writing stops feeling like abstract data entry and becomes a physical craft.",
+        "Good tools carry a quiet gravity on the desk. Heavy cream casing, bold burnt-orange accents, and crisp legends invite you to slow down just enough to find a steady, effortless rhythm across every sentence you compose.",
+        "Mechanical switches translate human thought into sharp acoustic punctuation. Every depression compresses a coiled spring, closes a gold-plated contact leaf, and rebounds with a satisfying thock that anchors your focus in the present.",
+        "Typography and industrial design share the same obsession with proportion. Whether shaping the bevel of a spacebar or balancing the aperture of a monospace glyph, clarity always emerges from generous margins and deliberate contrast.",
+        "Speed is never about rushing your fingers across the board; it is about eliminating hesitation. When your eyes read two words ahead and your hands trust the home row, accuracy naturally unlocks effortless velocity.",
+        "In an era of flat glass screens, physical resistance feels like a luxury. Turning a knurled rotary knob or feeling the subtle dish of a spherical keycap reminds us that interfaces are meant to be touched, heard, and enjoyed.",
+        "A well-tuned studio workspace balances warmth with precision. Saturated orange light casts soft afternoon shadows across matte ivory surfaces, turning an everyday typing benchmark into a playful ritual of rhythm and flow."
+      ];
+
+      /* ==========================================================================
+         2. COMPACT 65% KEYBOARD LAYOUT DEFINITION
+         Matches the reference aesthetic: vivid orange accent keys on W, A, S, D,
+         ESC, ENTER, and Arrow cluster; warm ivory on surrounding sculpted keys.
+         ========================================================================== */
+      const KEYBOARD_ROWS = [
+        [
+          { code: 'Escape', label: 'ESC', w: 1, color: 'orange', type: 'mod' },
+          { code: 'Digit1', label: '1', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit2', label: '2', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit3', label: '3', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit4', label: '4', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit5', label: '5', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit6', label: '6', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit7', label: '7', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit8', label: '8', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit9', label: '9', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Digit0', label: '0', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Minus', label: '-', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Equal', label: '=', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Backspace', label: '⌫', w: 2, color: 'ivory', type: 'mod' }
+        ],
+        [
+          { code: 'Tab', label: 'TAB', w: 1.5, color: 'ivory', type: 'mod' },
+          { code: 'KeyQ', label: 'Q', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyW', label: 'W', w: 1, color: 'orange', type: 'alpha' },
+          { code: 'KeyE', label: 'E', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyR', label: 'R', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyT', label: 'T', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyY', label: 'Y', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyU', label: 'U', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyI', label: 'I', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyO', label: 'O', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyP', label: 'P', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'BracketLeft', label: '[', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'BracketRight', label: ']', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Backslash', label: '\\', w: 1.5, color: 'ivory', type: 'mod' }
+        ],
+        [
+          { code: 'CapsLock', label: 'CAPS', w: 1.75, color: 'ivory', type: 'mod' },
+          { code: 'KeyA', label: 'A', w: 1, color: 'orange', type: 'alpha' },
+          { code: 'KeyS', label: 'S', w: 1, color: 'orange', type: 'alpha' },
+          { code: 'KeyD', label: 'D', w: 1, color: 'orange', type: 'alpha' },
+          { code: 'KeyF', label: 'F', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyG', label: 'G', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyH', label: 'H', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyJ', label: 'J', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyK', label: 'K', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyL', label: 'L', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Semicolon', label: ';', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Quote', label: "'", w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Enter', label: 'RETURN', w: 2.25, color: 'orange', type: 'enter' }
+        ],
+        [
+          { code: 'ShiftLeft', label: 'SHIFT', w: 2.25, color: 'ivory', type: 'mod' },
+          { code: 'KeyZ', label: 'Z', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyX', label: 'X', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyC', label: 'C', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyV', label: 'V', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyB', label: 'B', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyN', label: 'N', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'KeyM', label: 'M', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Comma', label: ',', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Period', label: '.', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'Slash', label: '/', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'ShiftRight', label: 'SHIFT', w: 1.75, color: 'ivory', type: 'mod' },
+          { code: 'ArrowUp', label: '▲', w: 1, color: 'orange', type: 'alpha' }
+        ],
+        [
+          { code: 'ControlLeft', label: 'CTRL', w: 1.25, color: 'ivory', type: 'mod' },
+          { code: 'AltLeft', label: 'ALT', w: 1.25, color: 'ivory', type: 'mod' },
+          { code: 'MetaLeft', label: 'CMD', w: 1.25, color: 'ivory', type: 'mod' },
+          { code: 'Space', label: '—', w: 6.25, color: 'ivory', type: 'space' },
+          { code: 'AltRight', label: 'FN', w: 1, color: 'ivory', type: 'mod' },
+          { code: 'ControlRight', label: 'CTRL', w: 1, color: 'ivory', type: 'mod' },
+          { code: 'ArrowLeft', label: '◄', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'ArrowDown', label: '▼', w: 1, color: 'ivory', type: 'alpha' },
+          { code: 'ArrowRight', label: '►', w: 1, color: 'ivory', type: 'alpha' }
+        ]
+      ];
+
+      // Map characters to physical KeyboardEvent.code for target highlighting
+      const CHAR_TO_CODE = {
+        'a': 'KeyA', 'b': 'KeyB', 'c': 'KeyC', 'd': 'KeyD', 'e': 'KeyE',
+        'f': 'KeyF', 'g': 'KeyG', 'h': 'KeyH', 'i': 'KeyI', 'j': 'KeyJ',
+        'k': 'KeyK', 'l': 'KeyL', 'm': 'KeyM', 'n': 'KeyN', 'o': 'KeyO',
+        'p': 'KeyP', 'q': 'KeyQ', 'r': 'KeyR', 's': 'KeyS', 't': 'KeyT',
+        'u': 'KeyU', 'v': 'KeyV', 'w': 'KeyW', 'x': 'KeyX', 'y': 'KeyY',
+        'z': 'KeyZ',
+        '0': 'Digit0', '1': 'Digit1', '2': 'Digit2', '3': 'Digit3', '4': 'Digit4',
+        '5': 'Digit5', '6': 'Digit6', '7': 'Digit7', '8': 'Digit8', '9': 'Digit9',
+        ' ': 'Space', '-': 'Minus', '=': 'Equal', '[': 'BracketLeft', ']': 'BracketRight',
+        '\\': 'Backslash', ';': 'Semicolon', ':': 'Semicolon', "'": 'Quote', '"': 'Quote',
+        ',': 'Comma', '.': 'Period', '/': 'Slash', '?': 'Slash', '!': 'Digit1'
+      };
+
+      /* ==========================================================================
+         3. WEB AUDIO API MECHANICAL SWITCH SYNTHESIZER
+         Models tactile cream/POM switch acoustics:
+         - Low-passed body thud (case resonance)
+         - Bandpass filtered noise burst (stem impact)
+         - High-frequency contact click
+         - Subtle release top-out sound on keyup
+         ========================================================================== */
+      class MechanicalAudioEngine {
+        constructor() {
+          this.ctx = null;
+          this.enabled = true;
+          this.volume = 0.7;
+          this.pitchOffset = 1.0; // Controlled by the 3D rotary knob!
+          this.noiseBuffer = null;
+        }
+
+        init() {
+          if (this.ctx) {
+            if (this.ctx.state === 'suspended') {
+              this.ctx.resume().catch(() => {});
+            }
+            return;
+          }
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          this.ctx = new AudioCtx();
+
+          // Pre-generate 0.25s white noise buffer for switch friction & impact bursts
+          const bufferSize = this.ctx.sampleRate * 0.25;
+          this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = this.noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+          }
+        }
+
+        playPress(keyType = 'alpha') {
+          if (!this.enabled || this.volume <= 0.01) return;
+          this.init();
+          if (!this.ctx || this.ctx.state !== 'running') return;
+
+          const now = this.ctx.currentTime;
+          const masterGain = this.ctx.createGain();
+          masterGain.gain.setValueAtTime(this.volume * 0.85, now);
+          masterGain.connect(this.ctx.destination);
+
+          // Slight organic micro-variation per keystroke
+          const jitter = (0.95 + Math.random() * 0.1) * this.pitchOffset;
+
+          // Profile tuning by key size
+          let bodyFreq = 195 * jitter;
+          let clickFreq = 2100 * jitter;
+          let decay = 0.055;
+
+          if (keyType === 'space') {
+            bodyFreq = 125 * jitter;
+            clickFreq = 1450 * jitter;
+            decay = 0.085;
+          } else if (keyType === 'enter' || keyType === 'mod') {
+            bodyFreq = 155 * jitter;
+            clickFreq = 1750 * jitter;
+            decay = 0.068;
+          }
+
+          // 1. Bottom-out housing "Thock" (low triangle/sine pitch drop)
+          const bodyOsc = this.ctx.createOscillator();
+          const bodyGain = this.ctx.createGain();
+          bodyOsc.type = 'triangle';
+          bodyOsc.frequency.setValueAtTime(bodyFreq * 1.4, now);
+          bodyOsc.frequency.exponentialRampToValueAtTime(bodyFreq * 0.45, now + decay);
+
+          bodyGain.gain.setValueAtTime(0.55, now);
+          bodyGain.gain.exponentialRampToValueAtTime(0.001, now + decay);
+
+          bodyOsc.connect(bodyGain);
+          bodyGain.connect(masterGain);
+          bodyOsc.start(now);
+          bodyOsc.stop(now + decay + 0.005);
+
+          // 2. Tactile stem transient (bandpass filtered noise burst)
+          if (this.noiseBuffer) {
+            const noiseSrc = this.ctx.createBufferSource();
+            noiseSrc.buffer = this.noiseBuffer;
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(clickFreq, now);
+            filter.Q.setValueAtTime(2.6, now);
+
+            const noiseGain = this.ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.65, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.024);
+
+            noiseSrc.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(masterGain);
+
+            noiseSrc.start(now);
+            noiseSrc.stop(now + 0.028);
+          }
+
+          // 3. Crisp keycap clack overtone
+          const clickOsc = this.ctx.createOscillator();
+          const clickGain = this.ctx.createGain();
+          clickOsc.type = 'sine';
+          clickOsc.frequency.setValueAtTime(clickFreq * 1.25, now);
+          clickOsc.frequency.exponentialRampToValueAtTime(clickFreq * 0.5, now + 0.016);
+
+          clickGain.gain.setValueAtTime(0.22, now);
+          clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.016);
+
+          clickOsc.connect(clickGain);
+          clickGain.connect(masterGain);
+          clickOsc.start(now);
+          clickOsc.stop(now + 0.02);
+        }
+
+        playRelease(keyType = 'alpha') {
+          if (!this.enabled || this.volume <= 0.01 || !this.ctx || this.ctx.state !== 'running') return;
+
+          const now = this.ctx.currentTime;
+          const jitter = (0.96 + Math.random() * 0.08) * this.pitchOffset;
+          const upOsc = this.ctx.createOscillator();
+          const upGain = this.ctx.createGain();
+
+          upOsc.type = 'sine';
+          const baseFreq = keyType === 'space' ? 280 : 390;
+          upOsc.frequency.setValueAtTime(baseFreq * jitter, now);
+          upOsc.frequency.exponentialRampToValueAtTime(baseFreq * 0.65, now + 0.022);
+
+          upGain.gain.setValueAtTime(this.volume * 0.14, now);
+          upGain.gain.exponentialRampToValueAtTime(0.001, now + 0.022);
+
+          upOsc.connect(upGain);
+          upGain.connect(this.ctx.destination);
+          upOsc.start(now);
+          upOsc.stop(now + 0.025);
+        }
+      }
+
+      const audioEngine = new MechanicalAudioEngine();
+
+      /* ==========================================================================
+         4. THREE.JS PROCEDURAL 3D KEYBOARD SCENE
+         Reproduces the reference illustration's sculptural aesthetic:
+         - Elevated three-quarter perspective
+         - Chunky cream rounded body with dark cartoon outline (#292824)
+         - Beveled ivory & orange keycaps with crisp legends
+         - Left-side physical rotary control knob
+         - Curved cream USB cable with metallic USB-A plug on the left
+         ========================================================================== */
+      class Keyboard3DStage {
+        constructor(containerEl, fallbackEl, onVirtualKeyTrigger, onKnobRotate) {
+          this.container = containerEl;
+          this.fallbackEl = fallbackEl;
+          this.onVirtualKeyTrigger = onVirtualKeyTrigger;
+          this.onKnobRotate = onKnobRotate;
+
+          this.keyMap = new Map(); // code -> keyController object
+          this.interactiveMeshes = [];
+          this.isWebGLAvailable = false;
+          this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+          this.boardTiltX = 0;
+          this.boardTiltZ = 0;
+          this.targetTiltX = 0;
+          this.targetTiltZ = 0;
+          this.userOrbitAzimuth = 0;
+          this.userOrbitPolar = 0;
+          this.knobAngle = 0;
+
+          this.init();
+        }
+
+        init() {
+          try {
+            if (typeof THREE === 'undefined') throw new Error('Three.js not loaded');
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) throw new Error('WebGL unavailable');
+            this.isWebGLAvailable = true;
+          } catch (err) {
+            this.buildFallback2D();
+            return;
+          }
+
+          const width = this.container.clientWidth || 960;
+          const height = this.container.clientHeight || 420;
+
+          this.scene = new THREE.Scene();
+
+          // Perspective camera matching the elevated 3/4 view in the reference image
+          this.camera = new THREE.PerspectiveCamera(32, width / height, 0.1, 100);
+          this.updateCameraFraming(width, height);
+
+          this.renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+            powerPreference: 'high-performance'
+          });
+          this.renderer.setSize(width, height);
+          this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          this.renderer.shadowMap.enabled = true;
+          this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+          this.container.appendChild(this.renderer.domElement);
+
+          // Studio Lighting
+          const ambientLight = new THREE.AmbientLight(0xFFF6E8, 0.78);
+          this.scene.add(ambientLight);
+
+          const mainLight = new THREE.DirectionalLight(0xFFFDF5, 0.82);
+          mainLight.position.set(8, 18, 10);
+          mainLight.castShadow = true;
+          mainLight.shadow.mapSize.width = 2048;
+          mainLight.shadow.mapSize.height = 2048;
+          mainLight.shadow.camera.near = 2;
+          mainLight.shadow.camera.far = 40;
+          const d = 12;
+          mainLight.shadow.camera.left = -d;
+          mainLight.shadow.camera.right = d;
+          mainLight.shadow.camera.top = d;
+          mainLight.shadow.camera.bottom = -d;
+          mainLight.shadow.bias = -0.0005;
+          this.scene.add(mainLight);
+
+          const warmFill = new THREE.DirectionalLight(0xFF9E5E, 0.35);
+          warmFill.position.set(-10, 6, -6);
+          this.scene.add(warmFill);
+
+          // Master group rotated slightly for the iconic three-quarter collectible angle
+          this.rigGroup = new THREE.Group();
+          this.keyboardGroup = new THREE.Group();
+          this.keyboardGroup.rotation.y = -0.22; // Iconic 3/4 angle
+          this.keyboardGroup.rotation.x = 0.08;
+          this.rigGroup.add(this.keyboardGroup);
+          this.scene.add(this.rigGroup);
+
+          // Shared Materials
+          this.materials = {
+            outline: new THREE.MeshBasicMaterial({ color: 0x292824, side: THREE.BackSide }),
+            outlineDark: new THREE.MeshBasicMaterial({ color: 0x292824 }),
+            caseCream: new THREE.MeshStandardMaterial({ color: 0xE7DEC8, roughness: 0.72, metalness: 0.03 }),
+            wellDark: new THREE.MeshStandardMaterial({ color: 0x292824, roughness: 0.9 }),
+            cableCream: new THREE.MeshStandardMaterial({ color: 0xF5F0DE, roughness: 0.6, metalness: 0.05 }),
+            metalPlug: new THREE.MeshStandardMaterial({ color: 0xB8AFA6, roughness: 0.35, metalness: 0.65 }),
+            shadowCatcher: new THREE.ShadowMaterial({ opacity: 0.28 })
+          };
+
+          // Ground shadow catcher plane (casts warmburnt orange shadow)
+          const groundGeo = new THREE.PlaneGeometry(50, 50);
+          const groundMesh = new THREE.Mesh(groundGeo, this.materials.shadowCatcher);
+          groundMesh.rotation.x = -Math.PI / 2;
+          groundMesh.position.y = -1.05;
+          groundMesh.receiveShadow = true;
+          this.keyboardGroup.add(groundMesh);
+
+          this.buildKeyboardBody();
+          this.buildRotaryKnob();
+          this.buildUsbCable();
+          this.buildKeycaps();
+          this.setupInteractions();
+
+          this.lastTime = performance.now();
+          this.animate = this.animate.bind(this);
+          requestAnimationFrame(this.animate);
+        }
+
+        // Helper: creates a rounded rectangle THREE.Shape
+        createRoundedRectShape(w, h, r) {
+          const shape = new THREE.Shape();
+          const x = -w / 2;
+          const y = -h / 2;
+          shape.moveTo(x + r, y);
+          shape.lineTo(x + w - r, y);
+          shape.quadraticCurveTo(x + w, y, x + w, y + r);
+          shape.lineTo(x + w, y + h - r);
+          shape.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          shape.lineTo(x + r, y + h);
+          shape.quadraticCurveTo(x, y + h, x, y + h - r);
+          shape.lineTo(x, y + r);
+          shape.quadraticCurveTo(x, y, x + r, y);
+          return shape;
+        }
+
+        buildKeyboardBody() {
+          // Board dimensions based on 15u width x 5 rows
+          this.unit = 0.92;
+          const boardW = 15 * this.unit + 1.15;
+          const boardD = 5 * this.unit + 1.15;
+
+          const baseShape = this.createRoundedRectShape(boardW, boardD, 0.65);
+          const extrudeSettings = {
+            depth: 0.85,
+            bevelEnabled: true,
+            bevelSegments: 5,
+            steps: 1,
+            bevelSize: 0.24,
+            bevelThickness: 0.28
+          };
+
+          const caseGeo = new THREE.ExtrudeGeometry(baseShape, extrudeSettings);
+          caseGeo.rotateX(-Math.PI / 2);
+
+          // Taper top vertices slightly inward for that chunky retro mechanical silhouette
+          const pos = caseGeo.attributes.position;
+          for (let i = 0; i < pos.count; i++) {
+            const py = pos.getY(i);
+            if (py > 0.4) {
+              pos.setX(i, pos.getX(i) * 0.965);
+              pos.setZ(i, pos.getZ(i) * 0.955);
+            }
+          }
+          caseGeo.computeVertexNormals();
+
+          const caseMesh = new THREE.Mesh(caseGeo, this.materials.caseCream);
+          caseMesh.position.y = -0.82;
+          caseMesh.castShadow = true;
+          caseMesh.receiveShadow = true;
+          this.keyboardGroup.add(caseMesh);
+
+          // Dark cartoon outline hull around keyboard body
+          const outlineGeo = caseGeo.clone();
+          const outlineMesh = new THREE.Mesh(outlineGeo, this.materials.outline);
+          outlineMesh.position.copy(caseMesh.position);
+          outlineMesh.scale.set(1.022, 1.08, 1.038);
+          this.keyboardGroup.add(outlineMesh);
+
+          // Recessed dark switch plate well
+          const wellShape = this.createRoundedRectShape(15 * this.unit + 0.22, 5 * this.unit + 0.22, 0.32);
+          const wellGeo = new THREE.ShapeGeometry(wellShape);
+          wellGeo.rotateX(-Math.PI / 2);
+          const wellMesh = new THREE.Mesh(wellGeo, this.materials.wellDark);
+          wellMesh.position.y = 0.24;
+          this.keyboardGroup.add(wellMesh);
+        }
+
+        buildRotaryKnob() {
+          // Small cream control knob on the front-left side of the keyboard casing, matching the reference
+          this.knobGroup = new THREE.Group();
+          const boardW = 15 * this.unit + 1.15;
+          this.knobGroup.position.set(-boardW / 2 - 0.22, -0.28, 1.25);
+          this.knobGroup.rotation.z = Math.PI / 2;
+
+          // Red/orange collar ring
+          const collarGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.12, 24);
+          const collarMat = new THREE.MeshStandardMaterial({ color: 0xC9470C, roughness: 0.6 });
+          const collarMesh = new THREE.Mesh(collarGeo, collarMat);
+          this.knobGroup.add(collarMesh);
+
+          // Cream knob cylinder
+          const knobGeo = new THREE.CylinderGeometry(0.36, 0.38, 0.46, 28);
+          const knobMesh = new THREE.Mesh(knobGeo, this.materials.cableCream);
+          knobMesh.position.y = 0.22;
+          knobMesh.castShadow = true;
+          knobMesh.userData = { isKnob: true };
+          this.interactiveMeshes.push(knobMesh);
+          this.knobGroup.add(knobMesh);
+
+          // Indicator notch on knob
+          const notchGeo = new THREE.BoxGeometry(0.07, 0.16, 0.22);
+          const notchMesh = new THREE.Mesh(notchGeo, this.materials.outlineDark);
+          notchMesh.position.set(0, 0.41, 0.14);
+          knobMesh.add(notchMesh);
+          this.knobCapMesh = knobMesh;
+
+          // Knob dark outline
+          const knobOutline = new THREE.Mesh(knobGeo.clone(), this.materials.outline);
+          knobOutline.position.copy(knobMesh.position);
+          knobOutline.scale.set(1.12, 1.08, 1.12);
+          this.knobGroup.add(knobOutline);
+
+          this.keyboardGroup.add(this.knobGroup);
+        }
+
+        buildUsbCable() {
+          // Curved cream-colored cable extending from the back-left of the keyboard with a USB-A plug
+          const curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(-4.2, -0.35, -2.9),
+            new THREE.Vector3(-5.8, -0.45, -4.4),
+            new THREE.Vector3(-8.1, -0.55, -3.5),
+            new THREE.Vector3(-8.9, -0.62, -1.2),
+            new THREE.Vector3(-9.7, -0.68, 0.7)
+          ]);
+
+          const tubeGeo = new THREE.TubeGeometry(curve, 44, 0.22, 16, false);
+          const cableMesh = new THREE.Mesh(tubeGeo, this.materials.cableCream);
+          cableMesh.castShadow = true;
+          this.keyboardGroup.add(cableMesh);
+
+          const tubeOutlineGeo = new THREE.TubeGeometry(curve, 44, 0.265, 16, false);
+          const cableOutline = new THREE.Mesh(tubeOutlineGeo, this.materials.outline);
+          this.keyboardGroup.add(cableOutline);
+
+          // USB Plug Housing at end of cable
+          const plugGroup = new THREE.Group();
+          plugGroup.position.set(-9.75, -0.65, 0.85);
+          plugGroup.rotation.y = -0.35;
+
+          const housingGeo = new THREE.BoxGeometry(0.92, 0.52, 1.35);
+          const housingMesh = new THREE.Mesh(housingGeo, this.materials.cableCream);
+          housingMesh.castShadow = true;
+          plugGroup.add(housingMesh);
+
+          const housingOutline = new THREE.Mesh(housingGeo.clone(), this.materials.outline);
+          housingOutline.scale.set(1.1, 1.14, 1.08);
+          plugGroup.add(housingOutline);
+
+          // Metallic USB connector tip
+          const tipGeo = new THREE.BoxGeometry(0.68, 0.32, 0.72);
+          const tipMesh = new THREE.Mesh(tipGeo, this.materials.metalPlug);
+          tipMesh.position.set(0, -0.02, 0.95);
+          tipMesh.castShadow = true;
+          plugGroup.add(tipMesh);
+
+          const tipOutline = new THREE.Mesh(tipGeo.clone(), this.materials.outline);
+          tipOutline.position.copy(tipMesh.position);
+          tipOutline.scale.set(1.12, 1.18, 1.1);
+          plugGroup.add(tipOutline);
+
+          // Two little rectangular holes on the USB metal tip
+          const holeGeo = new THREE.BoxGeometry(0.14, 0.05, 0.22);
+          const holeL = new THREE.Mesh(holeGeo, this.materials.outlineDark);
+          holeL.position.set(-0.16, 0.15, 0.98);
+          const holeR = holeL.clone();
+          holeR.position.x = 0.16;
+          plugGroup.add(holeL, holeR);
+
+          this.keyboardGroup.add(plugGroup);
+        }
+
+        createKeycapTexture(label, paletteType, wUnits) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 256;
+          canvas.height = 256;
+          const ctx = canvas.getContext('2d');
+
+          const bgHex = paletteType === 'orange' ? '#F36A16' :
+                        paletteType === 'target' ? '#FFB703' :
+                        paletteType === 'correct' ? '#2B8A3E' :
+                        paletteType === 'error' ? '#D92B2B' : '#F5F0DE';
+
+          const fgHex = (paletteType === 'orange' || paletteType === 'correct' || paletteType === 'error')
+                        ? '#FFFDF5' : '#292824';
+
+          // Base fill
+          ctx.fillStyle = bgHex;
+          ctx.fillRect(0, 0, 256, 256);
+
+          // Subtle top dish highlight
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.lineWidth = 10;
+          ctx.strokeRect(18, 18, 220, 220);
+
+          // Key Legend
+          ctx.fillStyle = fgHex;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          const isLongLabel = label.length > 2;
+          const fontSize = isLongLabel ? 54 : 92;
+          ctx.font = `800 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+
+          if (label === '—') {
+            // Spacebar tactile bar icon like reference image
+            ctx.fillStyle = '#FFFDF5';
+            ctx.beginPath();
+            ctx.roundRect(88, 118, 80, 20, 10);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(41,40,36,0.22)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          } else {
+            ctx.fillText(label, 128, 132);
+          }
+
+          const tex = new THREE.CanvasTexture(canvas);
+          tex.anisotropy = 4;
+          return tex;
+        }
+
+        buildKeycaps() {
+          const totalWidthUnits = 15;
+          const totalRows = KEYBOARD_ROWS.length;
+          const startX = -(totalWidthUnits * this.unit) / 2;
+          const startZ = -(totalRows * this.unit) / 2;
+
+          // Cache geometry by unit width for performance
+          const geoCache = new Map();
+
+          const getKeyGeo = (wUnits) => {
+            if (geoCache.has(wUnits)) return geoCache.get(wUnits);
+
+            const kw = wUnits * this.unit - 0.14;
+            const kd = this.unit - 0.14;
+            const shape = this.createRoundedRectShape(kw, kd, 0.15);
+
+            const extrudeOpts = {
+              depth: 0.36,
+              bevelEnabled: true,
+              bevelSegments: 3,
+              steps: 1,
+              bevelSize: 0.055,
+              bevelThickness: 0.08
+            };
+
+            const geo = new THREE.ExtrudeGeometry(shape, extrudeOpts);
+            geo.rotateX(-Math.PI / 2);
+
+            // Sculpted keycap taper (narrower top face than skirt)
+            const pos = geo.attributes.position;
+            const uvs = geo.attributes.uv;
+            for (let i = 0; i < pos.count; i++) {
+              const py = pos.getY(i);
+              const px = pos.getX(i);
+              const pz = pos.getZ(i);
+              if (py > 0.22) {
+                pos.setX(i, px * 0.84);
+                pos.setZ(i, pz * 0.84);
+              }
+              // Planar top-down UV projection so legends sit centered on the top dish
+              uvs.setXY(i, (px / (kw * 0.92)) + 0.5, (-pz / (kd * 0.92)) + 0.5);
+            }
+            geo.computeVertexNormals();
+            geoCache.set(wUnits, geo);
+            return geo;
+          };
+
+          KEYBOARD_ROWS.forEach((row, rIdx) => {
+            let cursorUnits = 0;
+            row.forEach((keyDef) => {
+              const wUnits = keyDef.w;
+              const centerX = startX + (cursorUnits + wUnits / 2) * this.unit;
+              const centerZ = startZ + (rIdx + 0.5) * this.unit;
+              cursorUnits += wUnits;
+
+              const keyGroup = new THREE.Group();
+              const restY = 0.25;
+              keyGroup.position.set(centerX, restY, centerZ);
+
+              const geo = getKeyGeo(wUnits);
+              const baseTex = this.createKeycapTexture(keyDef.label, keyDef.color, wUnits);
+
+              const sideColor = keyDef.color === 'orange' ? 0xD9530F : 0xE5DEC9;
+              const capMat = new THREE.MeshStandardMaterial({
+                map: baseTex,
+                roughness: 0.62,
+                metalness: 0.04
+              });
+
+              const mesh = new THREE.Mesh(geo, capMat);
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+              mesh.userData = { code: keyDef.code, keyDef };
+              keyGroup.add(mesh);
+
+              // Subtle dark keycap outline
+              const outlineMesh = new THREE.Mesh(geo, this.materials.outline);
+              outlineMesh.scale.set(1.045, 1.06, 1.055);
+              keyGroup.add(outlineMesh);
+
+              this.keyboardGroup.add(keyGroup);
+              this.interactiveMeshes.push(mesh);
+
+              this.keyMap.set(keyDef.code, {
+                code: keyDef.code,
+                def: keyDef,
+                group: keyGroup,
+                mesh: mesh,
+                material: capMat,
+                baseTex: baseTex,
+                stateTexCache: { base: baseTex },
+                restY: restY,
+                currentY: restY,
+                targetY: restY,
+                velocityY: 0,
+                isPressed: false,
+                isHovered: false,
+                isTarget: false,
+                flashState: null,
+                flashTimer: null
+              });
+            });
+          });
+        }
+
+        setKeyVisualState(keyCtrl, stateName) {
+          if (!keyCtrl) return;
+          const texKey = stateName || 'base';
+          if (!keyCtrl.stateTexCache[texKey]) {
+            keyCtrl.stateTexCache[texKey] = this.createKeycapTexture(
+              keyCtrl.def.label,
+              texKey === 'base' ? keyCtrl.def.color : texKey,
+              keyCtrl.def.w
+            );
+          }
+          keyCtrl.material.map = keyCtrl.stateTexCache[texKey];
+          keyCtrl.material.needsUpdate = true;
+        }
+
+        depressKey(code, status = null) {
+          if (!this.isWebGLAvailable) {
+            this.depressFallbackKey(code);
+            return;
+          }
+          const keyCtrl = this.keyMap.get(code);
+          if (!keyCtrl) return;
+
+          keyCtrl.isPressed = true;
+          keyCtrl.targetY = keyCtrl.restY - 0.21;
+
+          // Subtle board tilt reaction based on key position
+          if (!this.reducedMotion) {
+            this.targetTiltZ = -keyCtrl.group.position.x * 0.0035;
+            this.targetTiltX = keyCtrl.group.position.z * 0.006;
+          }
+
+          if (status === 'correct' || status === 'error') {
+            if (keyCtrl.flashTimer) clearTimeout(keyCtrl.flashTimer);
+            this.setKeyVisualState(keyCtrl, status);
+            keyCtrl.flashTimer = setTimeout(() => {
+              this.setKeyVisualState(keyCtrl, keyCtrl.isTarget ? 'target' : 'base');
+            }, 190);
+          }
+        }
+
+        releaseKey(code) {
+          if (!this.isWebGLAvailable) {
+            this.releaseFallbackKey(code);
+            return;
+          }
+          const keyCtrl = this.keyMap.get(code);
+          if (!keyCtrl) return;
+
+          keyCtrl.isPressed = false;
+          keyCtrl.targetY = keyCtrl.isHovered ? keyCtrl.restY + 0.04 : keyCtrl.restY;
+          this.targetTiltX = 0;
+          this.targetTiltZ = 0;
+        }
+
+        releaseAllKeys() {
+          this.keyMap.forEach((ctrl) => {
+            ctrl.isPressed = false;
+            ctrl.targetY = ctrl.restY;
+          });
+          this.targetTiltX = 0;
+          this.targetTiltZ = 0;
+        }
+
+        highlightTargetKey(code) {
+          if (!this.isWebGLAvailable) return;
+          this.keyMap.forEach((ctrl, kCode) => {
+            const shouldBeTarget = kCode === code;
+            if (ctrl.isTarget !== shouldBeTarget) {
+              ctrl.isTarget = shouldBeTarget;
+              this.setKeyVisualState(ctrl, shouldBeTarget ? 'target' : 'base');
+            }
+          });
+        }
+
+        setupInteractions() {
+          this.raycaster = new THREE.Raycaster();
+          this.pointer = new THREE.Vector2();
+          this.hoveredCtrl = null;
+          this.activePointerCode = null;
+          this.isDraggingOrbit = false;
+          this.dragStart = { x: 0, y: 0 };
+
+          const dom = this.renderer.domElement;
+
+          const updatePointer = (e) => {
+            const rect = dom.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+            return { clientX, clientY };
+          };
+
+          dom.addEventListener('pointermove', (e) => {
+            const coords = updatePointer(e);
+
+            if (this.isDraggingOrbit) {
+              const dx = (coords.clientX - this.dragStart.x) * 0.005;
+              const dy = (coords.clientY - this.dragStart.y) * 0.004;
+              this.userOrbitAzimuth = Math.max(-0.35, Math.min(0.35, dx));
+              this.userOrbitPolar = Math.max(-0.2, Math.min(0.2, dy));
+              return;
+            }
+
+            this.raycaster.setFromCamera(this.pointer, this.camera);
+            const hits = this.raycaster.intersectObjects(this.interactiveMeshes, false);
+
+            if (hits.length > 0) {
+              const hitObj = hits[0].object;
+              if (hitObj.userData.isKnob) {
+                dom.style.cursor = 'ns-resize';
+                return;
+              }
+              const code = hitObj.userData.code;
+              const ctrl = this.keyMap.get(code);
+              if (this.hoveredCtrl && this.hoveredCtrl !== ctrl) {
+                this.hoveredCtrl.isHovered = false;
+                if (!this.hoveredCtrl.isPressed) this.hoveredCtrl.targetY = this.hoveredCtrl.restY;
+              }
+              if (ctrl) {
+                ctrl.isHovered = true;
+                if (!ctrl.isPressed) ctrl.targetY = ctrl.restY + 0.045;
+                this.hoveredCtrl = ctrl;
+                dom.style.cursor = 'pointer';
+              }
+            } else {
+              if (this.hoveredCtrl) {
+                this.hoveredCtrl.isHovered = false;
+                if (!this.hoveredCtrl.isPressed) this.hoveredCtrl.targetY = this.hoveredCtrl.restY;
+                this.hoveredCtrl = null;
+              }
+              dom.style.cursor = 'grab';
+            }
+          });
+
+          dom.addEventListener('pointerdown', (e) => {
+            const coords = updatePointer(e);
+            this.raycaster.setFromCamera(this.pointer, this.camera);
+            const hits = this.raycaster.intersectObjects(this.interactiveMeshes, false);
+
+            if (hits.length > 0) {
+              const hitObj = hits[0].object;
+              if (hitObj.userData.isKnob) {
+                this.knobAngle += Math.PI / 4;
+                if (this.knobCapMesh) this.knobCapMesh.rotation.y = this.knobAngle;
+                if (this.onKnobRotate) this.onKnobRotate();
+                return;
+              }
+              const code = hitObj.userData.code;
+              if (code) {
+                this.activePointerCode = code;
+                if (this.onVirtualKeyTrigger) this.onVirtualKeyTrigger(code, true);
+              }
+            } else {
+              this.isDraggingOrbit = true;
+              this.dragStart = coords;
+            }
+          });
+
+          window.addEventListener('pointerup', () => {
+            if (this.activePointerCode) {
+              if (this.onVirtualKeyTrigger) this.onVirtualKeyTrigger(this.activePointerCode, false);
+              this.activePointerCode = null;
+            }
+            this.isDraggingOrbit = false;
+          });
+
+          window.addEventListener('resize', () => this.handleResize());
+        }
+
+        updateCameraFraming(width, height) {
+          const aspect = width / Math.max(height, 1);
+          this.camera.aspect = aspect;
+
+          // Responsive framing so the board never clips on small mobile screens
+          let dist = 14.2;
+          if (aspect < 1.35) dist = 17.5 / Math.max(aspect, 0.58);
+          if (aspect > 2.2) dist = 13.4;
+
+          this.camera.position.set(-1.5, dist * 0.68, dist * 0.72);
+          this.camera.lookAt(-0.4, -0.2, 0);
+          this.camera.updateProjectionMatrix();
+        }
+
+        handleResize() {
+          if (!this.isWebGLAvailable || !this.renderer) return;
+          const width = this.container.clientWidth;
+          const height = this.container.clientHeight;
+          if (width === 0 || height === 0) return;
+
+          this.updateCameraFraming(width, height);
+          this.renderer.setSize(width, height);
+        }
+
+        animate(now) {
+          requestAnimationFrame(this.animate);
+          const dt = Math.min((now - this.lastTime) / 1000, 0.05);
+          this.lastTime = now;
+
+          // Spring physics for each 3D keycap
+          const stiffness = this.reducedMotion ? 450 : 320;
+          const damping = this.reducedMotion ? 38 : 22;
+
+          this.keyMap.forEach((ctrl) => {
+            const displacement = ctrl.targetY - ctrl.currentY;
+            const springForce = displacement * stiffness;
+            const dampingForce = -ctrl.velocityY * damping;
+            const accel = springForce + dampingForce;
+
+            ctrl.velocityY += accel * dt;
+            ctrl.currentY += ctrl.velocityY * dt;
+            ctrl.group.position.y = ctrl.currentY;
+          });
+
+          // Subtle board chassis reactivity + user drag orbit
+          this.boardTiltX += (this.targetTiltX + this.userOrbitPolar - this.boardTiltX) * 0.14;
+          this.boardTiltZ += (this.targetTiltZ - this.boardTiltZ) * 0.14;
+          this.rigGroup.rotation.x = this.boardTiltX;
+          this.rigGroup.rotation.z = this.boardTiltZ;
+          this.rigGroup.rotation.y += (this.userOrbitAzimuth - this.rigGroup.rotation.y) * 0.12;
+
+          this.renderer.render(this.scene, this.camera);
+        }
+
+        /* 2D Fallback if WebGL is disabled */
+        buildFallback2D() {
+          this.container.style.display = 'none';
+          this.fallbackEl.style.display = 'flex';
+          this.fallbackEl.innerHTML = '';
+          this.fallbackKeyEls = new Map();
+
+          KEYBOARD_ROWS.forEach((row) => {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'fallback-row';
+            row.forEach((k) => {
+              const kEl = document.createElement('div');
+              kEl.className = `fallback-key ${k.color === 'orange' ? 'orange' : ''}`;
+              kEl.style.flex = k.w;
+              kEl.textContent = k.label;
+              kEl.addEventListener('pointerdown', () => {
+                if (this.onVirtualKeyTrigger) this.onVirtualKeyTrigger(k.code, true);
+              });
+              kEl.addEventListener('pointerup', () => {
+                if (this.onVirtualKeyTrigger) this.onVirtualKeyTrigger(k.code, false);
+              });
+              rowEl.appendChild(kEl);
+              this.fallbackKeyEls.set(k.code, kEl);
+            });
+            this.fallbackEl.appendChild(rowEl);
+          });
+        }
+
+        depressFallbackKey(code) {
+          const el = this.fallbackKeyEls && this.fallbackKeyEls.get(code);
+          if (el) el.classList.add('pressed');
+        }
+
+        releaseFallbackKey(code) {
+          const el = this.fallbackKeyEls && this.fallbackKeyEls.get(code);
+          if (el) el.classList.remove('pressed');
+        }
+      }
+
+      /* ==========================================================================
+         5. TYPING TEST ENGINE & PHYSICAL KEYBOARD SYNCHRONIZATION
+         ========================================================================== */
+      class TypingTestController {
+        constructor() {
+          // State
+          this.duration = 30;
+          this.timeRemaining = 30;
+          this.status = 'idle'; // 'idle' | 'running' | 'finished'
+          this.passageIndex = 0;
+          this.passageText = '';
+          this.charSpans = [];
+          this.cursor = 0;
+
+          this.totalAttempted = 0;
+          this.correctStrokes = 0;
+          this.errorStrokes = 0;
+          this.startTime = 0;
+          this.timerInterval = null;
+          this.wpmSamples = [];
+          this.sessionHistory = [];
+          this.pressedCodes = new Set();
+          this.tabPressed = false;
+
+          // DOM References
+          this.passageWordsEl = document.getElementById('passage-words');
+          this.passageViewportEl = document.getElementById('passage-viewport');
+          this.liveTimerEl = document.getElementById('live-timer');
+          this.liveWpmEl = document.getElementById('live-wpm');
+          this.liveAccEl = document.getElementById('live-acc');
+          this.liveErrorsEl = document.getElementById('live-errors');
+          this.progressFillEl = document.getElementById('progress-fill');
+          this.nextKeyIndicatorEl = document.getElementById('next-key-indicator');
+          this.hiddenInput = document.getElementById('hidden-typing-input');
+
+          // Initialize 3D Stage
+          this.stage3D = new Keyboard3DStage(
+            document.getElementById('keyboard-canvas-container'),
+            document.getElementById('fallback-keyboard'),
+            (code, isDown) => this.handleVirtualKeyClick(code, isDown),
+            () => this.handleKnobTurn()
+          );
+
+          this.loadPassage(0);
+          this.bindEvents();
+        }
+
+        loadPassage(idx) {
+          this.passageIndex = idx % PASSAGES.length;
+          // Ensure passage is long enough for 120s tests by joining two passages if needed
+          const base = PASSAGES[this.passageIndex];
+          const extra = PASSAGES[(this.passageIndex + 1) % PASSAGES.length];
+          this.passageText = this.duration >= 60 ? `${base} ${extra}` : base;
+
+          this.resetTestState();
+        }
+
+        resetTestState() {
+          if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+          }
+
+          this.status = 'idle';
+          this.timeRemaining = this.duration;
+          this.cursor = 0;
+          this.totalAttempted = 0;
+          this.correctStrokes = 0;
+          this.errorStrokes = 0;
+          this.wpmSamples = [];
+
+          // Render characters
+          this.passageWordsEl.innerHTML = '';
+          this.passageWordsEl.style.transform = 'translateY(0px)';
+          this.charSpans = [];
+
+          for (let i = 0; i < this.passageText.length; i++) {
+            const span = document.createElement('span');
+            span.className = 'char' + (i === 0 ? ' current' : '');
+            span.textContent = this.passageText[i];
+            this.passageWordsEl.appendChild(span);
+            this.charSpans.push(span);
+          }
+
+          this.updateLiveMetricsUI();
+          this.progressFillEl.style.width = '0%';
+          this.updateTargetKeyHighlight();
+        }
+
+        startTimer() {
+          if (this.status !== 'idle') return;
+          this.status = 'running';
+          this.startTime = performance.now();
+
+          this.timerInterval = setInterval(() => {
+            const elapsedSec = (performance.now() - this.startTime) / 1000;
+            const remaining = Math.max(0, this.duration - elapsedSec);
+            this.timeRemaining = Math.ceil(remaining);
+
+            // Progress bar
+            const pct = Math.min(100, (elapsedSec / this.duration) * 100);
+            this.progressFillEl.style.width = `${pct}%`;
+
+            // Record WPM interval sample for consistency metric
+            if (elapsedSec > 1) {
+              const currentWpm = (this.correctStrokes / 5) / (elapsedSec / 60);
+              this.wpmSamples.push(currentWpm);
+            }
+
+            this.updateLiveMetricsUI();
+
+            if (remaining <= 0) {
+              this.finishTest();
+            }
+          }, 100);
+        }
+
+        updateLiveMetricsUI() {
+          this.liveTimerEl.textContent = `${this.timeRemaining}s`;
+
+          let wpm = 0;
+          if (this.status === 'running' && this.startTime > 0) {
+            const elapsedMin = Math.max((performance.now() - this.startTime) / 60000, 0.01);
+            wpm = Math.round((this.correctStrokes / 5) / elapsedMin);
+          }
+          const acc = this.totalAttempted > 0
+            ? Math.round((this.correctStrokes / this.totalAttempted) * 100)
+            : 100;
+
+          this.liveWpmEl.textContent = wpm;
+          this.liveAccEl.textContent = `${acc}%`;
+          this.liveErrorsEl.textContent = this.errorStrokes;
+        }
+
+        updateTargetKeyHighlight() {
+          const targetChar = this.passageText[this.cursor];
+          if (!targetChar) return;
+          this.nextKeyIndicatorEl.textContent = targetChar === ' ' ? 'SPACE' : targetChar.toUpperCase();
+          const code = CHAR_TO_CODE[targetChar.toLowerCase()];
+          this.stage3D.highlightTargetKey(code);
+        }
+
+        autoScrollPassage() {
+          const currentSpan = this.charSpans[this.cursor];
+          if (!currentSpan) return;
+          const offsetTop = currentSpan.offsetTop;
+          const lineHeight = 36;
+          if (offsetTop > lineHeight) {
+            const scrollRows = Math.floor(offsetTop / lineHeight);
+            this.passageWordsEl.style.transform = `translateY(-${scrollRows * lineHeight}px)`;
+          } else {
+            this.passageWordsEl.style.transform = 'translateY(0px)';
+          }
+        }
+
+        processCharacterInput(typedChar, physicalCode) {
+          if (this.status === 'finished') return;
+
+          if (this.status === 'idle') {
+            this.startTimer();
+          }
+
+          const expectedChar = this.passageText[this.cursor];
+          if (expectedChar === undefined) return;
+
+          this.totalAttempted++;
+          const currentSpan = this.charSpans[this.cursor];
+          currentSpan.classList.remove('current');
+
+          let isCorrect = typedChar === expectedChar;
+          if (isCorrect) {
+            this.correctStrokes++;
+            currentSpan.classList.add('correct');
+            this.stage3D.depressKey(physicalCode, 'correct');
+          } else {
+            this.errorStrokes++;
+            currentSpan.classList.add('incorrect');
+            this.stage3D.depressKey(physicalCode, 'error');
+          }
+
+          this.cursor++;
+
+          if (this.cursor >= this.passageText.length) {
+            this.finishTest();
+            return;
+          }
+
+          this.charSpans[this.cursor].classList.add('current');
+          this.autoScrollPassage();
+          this.updateTargetKeyHighlight();
+          this.updateLiveMetricsUI();
+        }
+
+        processBackspace() {
+          if (this.status !== 'running' || this.cursor <= 0) return;
+
+          this.charSpans[this.cursor].classList.remove('current');
+          this.cursor--;
+          const prevSpan = this.charSpans[this.cursor];
+          prevSpan.classList.remove('correct', 'incorrect');
+          prevSpan.classList.add('current');
+
+          this.autoScrollPassage();
+          this.updateTargetKeyHighlight();
+        }
+
+        finishTest() {
+          if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+          }
+          this.status = 'finished';
+          this.progressFillEl.style.width = '100%';
+
+          const elapsedMin = Math.max((performance.now() - this.startTime) / 60000, this.duration / 60);
+          const netWpm = Math.round((this.correctStrokes / 5) / elapsedMin);
+          const rawWpm = Math.round((this.totalAttempted / 5) / elapsedMin);
+          const accuracy = this.totalAttempted > 0
+            ? Math.round((this.correctStrokes / this.totalAttempted) * 100)
+            : 100;
+
+          // Calculate Consistency from coefficient of variation of WPM samples
+          let consistency = 96;
+          if (this.wpmSamples.length > 3) {
+            const mean = this.wpmSamples.reduce((a, b) => a + b, 0) / this.wpmSamples.length;
+            if (mean > 0) {
+              const variance = this.wpmSamples.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / this.wpmSamples.length;
+              const stdDev = Math.sqrt(variance);
+              consistency = Math.max(40, Math.min(99, Math.round(100 - (stdDev / mean) * 100)));
+            }
+          }
+
+          // Save to in-session history
+          this.sessionHistory.unshift({ wpm: netWpm, acc: accuracy, dur: this.duration });
+          if (this.sessionHistory.length > 5) this.sessionHistory.pop();
+
+          // Populate Results Modal
+          document.getElementById('res-wpm').textContent = netWpm;
+          document.getElementById('res-acc').textContent = `${accuracy}%`;
+          document.getElementById('res-raw').textContent = rawWpm;
+          document.getElementById('res-cons').textContent = `${consistency}%`;
+          document.getElementById('res-chars-detail').textContent =
+            `Keystrokes: ${this.correctStrokes} correct / ${this.errorStrokes} errors (${this.totalAttempted} total)`;
+
+          let msg = 'Crisp rhythm and solid mechanical precision.';
+          if (netWpm >= 90 && accuracy >= 96) {
+            msg = 'Extraordinary velocity! Your fingers are flying across the switches.';
+          } else if (netWpm >= 65) {
+            msg = 'Smooth, confident cadence with great tactile control.';
+          } else if (accuracy < 88) {
+            msg = 'Focus on clean, unhurried strikes—speed follows accuracy.';
+          }
+          document.getElementById('results-message').textContent = msg;
+
+          const histEl = document.getElementById('session-history-list');
+          histEl.innerHTML = '';
+          this.sessionHistory.forEach((h, idx) => {
+            const pill = document.createElement('span');
+            pill.className = 'history-pill';
+            pill.textContent = `#${idx + 1}: ${h.wpm} WPM (${h.acc}% • ${h.dur}s)`;
+            histEl.appendChild(pill);
+          });
+
+          document.getElementById('results-modal').classList.add('open');
+        }
+
+        getKeySoundType(code) {
+          if (code === 'Space') return 'space';
+          if (code === 'Enter') return 'enter';
+          if (code.startsWith('Shift') || code.startsWith('Control') || code.startsWith('Alt') ||
+              code === 'Tab' || code === 'CapsLock' || code === 'Backspace' || code === 'Escape') {
+            return 'mod';
+          }
+          return 'alpha';
+        }
+
+        handleVirtualKeyClick(code, isDown) {
+          const soundType = this.getKeySoundType(code);
+          if (isDown) {
+            audioEngine.playPress(soundType);
+            this.stage3D.depressKey(code);
+
+            if (code === 'Backspace') {
+              this.processBackspace();
+              return;
+            }
+            if (code === 'Space') {
+              this.processCharacterInput(' ', code);
+              return;
+            }
+            if (code.startsWith('Key')) {
+              const letter = code.replace('Key', '').toLowerCase();
+              const expected = this.passageText[this.cursor];
+              const charToType = (expected && expected === expected.toUpperCase() && expected.toLowerCase() === letter)
+                ? letter.toUpperCase()
+                : letter;
+              this.processCharacterInput(charToType, code);
+            }
+          } else {
+            audioEngine.playRelease(soundType);
+            this.stage3D.releaseKey(code);
+          }
+        }
+
+        handleKnobTurn() {
+          // Cycle switch acoustic pitch between Deep Thock, Balanced Cream, and Crisp Clicky
+          const pitches = [0.82, 1.0, 1.22];
+          const names = ['Deep Thock Switch Profile', 'Balanced Cream Switch Profile', 'Crisp Tactile Switch Profile'];
+          this.knobIdx = ((this.knobIdx || 0) + 1) % pitches.length;
+          audioEngine.pitchOffset = pitches[this.knobIdx];
+          audioEngine.playPress('space');
+          const hintEl = document.getElementById('stage-hint');
+          if (hintEl) {
+            hintEl.textContent = `Knob tuned: ${names[this.knobIdx]}`;
+          }
+        }
+
+        bindEvents() {
+          // Document-level real physical keyboard synchronization
+          window.addEventListener('keydown', (e) => {
+            // Allow standard browser shortcuts (Cmd/Ctrl + R, C, V, etc.)
+            if (e.ctrlKey || e.metaKey) return;
+
+            const code = e.code;
+
+            // Quick Restart combo: Tab + Enter
+            if (code === 'Tab') {
+              this.tabPressed = true;
+            }
+            if (code === 'Enter' && this.tabPressed) {
+              e.preventDefault();
+              document.getElementById('results-modal').classList.remove('open');
+              this.resetTestState();
+              return;
+            }
+
+            // Close modals or reset on Escape
+            if (code === 'Escape') {
+              document.getElementById('results-modal').classList.remove('open');
+              document.getElementById('about-modal').classList.remove('open');
+              this.resetTestState();
+            }
+
+            // Ignore held key auto-repeat for mechanical sound & duplicate depressions
+            if (e.repeat) {
+              if (code === 'Backspace') {
+                e.preventDefault();
+                this.processBackspace();
+              }
+              return;
+            }
+
+            if (!this.pressedCodes.has(code)) {
+              this.pressedCodes.add(code);
+              const soundType = this.getKeySoundType(code);
+              audioEngine.playPress(soundType);
+              this.stage3D.depressKey(code);
+            }
+
+            // If a modal is open, let Enter trigger "Try Again"
+            const resultsModal = document.getElementById('results-modal');
+            if (resultsModal.classList.contains('open')) {
+              if (code === 'Enter') {
+                e.preventDefault();
+                resultsModal.classList.remove('open');
+                this.loadPassage(this.passageIndex + 1);
+              }
+              return;
+            }
+
+            if (document.getElementById('about-modal').classList.contains('open')) {
+              return;
+            }
+
+            if (code === 'Backspace') {
+              e.preventDefault();
+              this.processBackspace();
+              return;
+            }
+
+            // Process printable single characters
+            if (e.key && e.key.length === 1) {
+              if (code === 'Space') {
+                e.preventDefault(); // Prevent page scroll while typing
+              }
+              this.processCharacterInput(e.key, code);
+            }
+          });
+
+          window.addEventListener('keyup', (e) => {
+            const code = e.code;
+            if (code === 'Tab') this.tabPressed = false;
+
+            if (this.pressedCodes.has(code)) {
+              this.pressedCodes.delete(code);
+              const soundType = this.getKeySoundType(code);
+              audioEngine.playRelease(soundType);
+              this.stage3D.releaseKey(code);
+            }
+          });
+
+          // Clear stuck keys on window blur or visibility change
+          const clearAllKeys = () => {
+            this.pressedCodes.clear();
+            this.tabPressed = false;
+            this.stage3D.releaseAllKeys();
+          };
+          window.addEventListener('blur', clearAllKeys);
+          document.addEventListener('visibilitychange', () => {
+            if (document.hidden) clearAllKeys();
+          });
+
+          // Focus hidden input on mobile tap of passage viewport
+          this.passageViewportEl.addEventListener('click', () => {
+            if (window.matchMedia('(pointer: coarse)').matches) {
+              this.hiddenInput.focus();
+            }
+          });
+
+          // Duration Buttons (Header & Modal)
+          const setDuration = (sec) => {
+            this.duration = sec;
+            document.querySelectorAll('.duration-btn, .modal-dur-btn').forEach((btn) => {
+              btn.classList.toggle('active', Number(btn.dataset.duration) === sec);
+            });
+            this.loadPassage(this.passageIndex);
+          };
+
+          document.querySelectorAll('.duration-btn, .modal-dur-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              audioEngine.playPress('mod');
+              setDuration(Number(btn.dataset.duration));
+              btn.blur();
+            });
+          });
+
+          // Sound Toggle & Volume Slider
+          const soundToggleBtn = document.getElementById('sound-toggle');
+          const iconOn = document.getElementById('sound-icon-on');
+          const iconOff = document.getElementById('sound-icon-off');
+          const volSlider = document.getElementById('volume-slider');
+
+          soundToggleBtn.addEventListener('click', () => {
+            audioEngine.enabled = !audioEngine.enabled;
+            iconOn.style.display = audioEngine.enabled ? 'block' : 'none';
+            iconOff.style.display = audioEngine.enabled ? 'none' : 'block';
+            if (audioEngine.enabled) audioEngine.playPress('alpha');
+            soundToggleBtn.blur();
+          });
+
+          volSlider.addEventListener('input', (e) => {
+            audioEngine.volume = parseFloat(e.target.value);
+            audioEngine.enabled = audioEngine.volume > 0.01;
+            iconOn.style.display = audioEngine.enabled ? 'block' : 'none';
+            iconOff.style.display = audioEngine.enabled ? 'none' : 'block';
+          });
+
+          // Restart & New Passage Buttons
+          document.getElementById('restart-btn').addEventListener('click', (e) => {
+            audioEngine.playPress('mod');
+            this.resetTestState();
+            e.currentTarget.blur();
+          });
+
+          document.getElementById('passage-next-btn').addEventListener('click', (e) => {
+            audioEngine.playPress('mod');
+            this.loadPassage(this.passageIndex + 1);
+            e.currentTarget.blur();
+          });
+
+          document.getElementById('brand-reset').addEventListener('click', (e) => {
+            e.preventDefault();
+            audioEngine.playPress('mod');
+            this.resetTestState();
+          });
+
+          // Theme Toggle (Studio Orange <-> Espresso Dark)
+          const themeBtn = document.getElementById('theme-toggle');
+          const themeLabel = document.getElementById('theme-label');
+          themeBtn.addEventListener('click', () => {
+            audioEngine.playPress('mod');
+            const isEspresso = document.documentElement.getAttribute('data-theme') === 'espresso';
+            if (isEspresso) {
+              document.documentElement.removeAttribute('data-theme');
+              themeLabel.textContent = 'Studio Orange';
+            } else {
+              document.documentElement.setAttribute('data-theme', 'espresso');
+              themeLabel.textContent = 'Espresso Mode';
+            }
+            themeBtn.blur();
+          });
+
+          // Modals
+          const resultsModal = document.getElementById('results-modal');
+          const aboutModal = document.getElementById('about-modal');
+
+          document.getElementById('try-again-btn').addEventListener('click', () => {
+            audioEngine.playPress('enter');
+            resultsModal.classList.remove('open');
+            this.loadPassage(this.passageIndex + 1);
+          });
+
+          document.getElementById('close-results-btn').addEventListener('click', () => {
+            resultsModal.classList.remove('open');
+            this.resetTestState();
+          });
+
+          document.getElementById('about-btn').addEventListener('click', () => {
+            audioEngine.playPress('mod');
+            aboutModal.classList.add('open');
+          });
+
+          document.getElementById('close-about-btn').addEventListener('click', () => {
+            aboutModal.classList.remove('open');
+          });
+
+          document.getElementById('about-got-it-btn').addEventListener('click', () => {
+            audioEngine.playPress('enter');
+            aboutModal.classList.remove('open');
+          });
+        }
+      }
+
+      // Boot application once DOM is ready
+      window.addEventListener('DOMContentLoaded', () => {
+        new TypingTestController();
+      });
+    })();
+  </script>
+</body>
+</html>
