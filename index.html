@@ -515,7 +515,8 @@
       height: 100%;
       position: relative;
       cursor: grab;
-      touch-action: manipulation;
+      touch-action: none;
+      user-select: none;
     }
 
     #keyboard-canvas-container:active {
@@ -935,7 +936,7 @@
         <div id="keyboard-canvas-container"></div>
         <div class="fallback-keyboard" id="fallback-keyboard" aria-label="2D Fallback Keyboard"></div>
         <div class="stage-Floating-hint" id="stage-hint">
-          <span>Type anywhere • Drag to subtly orbit • Turn the front-left knob for switch pitch</span>
+          <span>Type anywhere • Drag to rotate in 3D (Double-click to reset view) • Click front-left knob for switch pitch</span>
         </div>
       </section>
     </main>
@@ -1021,7 +1022,7 @@
           <strong>How it works:</strong> Every physical key press (`keydown` and `keyup` via `KeyboardEvent.code`) depresses the matching sculpted 3D keycap with spring physics, triggers a custom-filtered acoustic transient ("thock" for spacebar and modifiers, crisp "clack" for alphas), and measures your net WPM, accuracy, and rhythm consistency.
         </p>
         <p>
-          <strong>Interactive Knob:</strong> Click or drag the cream rotary encoder knob on the front-left side of the 3D keyboard case to shift the acoustic pitch profile of the switches.
+          <strong>Interactive 3D &amp; Knob:</strong> Click and drag anywhere on the 3D scene to freely orbit and inspect the sculpted keycaps and braided USB cable (double-click to snap back to the default studio angle). Click the cream rotary knob on the front-left side of the keyboard to cycle switch pitch profiles.
         </p>
       </div>
       <div class="modal-footer" style="justify-content:flex-end;">
@@ -1049,8 +1050,6 @@
 
       /* ==========================================================================
          2. COMPACT 65% KEYBOARD LAYOUT DEFINITION
-         Matches the reference aesthetic: vivid orange accent keys on W, A, S, D,
-         ESC, ENTER, and Arrow cluster; warm ivory on surrounding sculpted keys.
          ========================================================================== */
       const KEYBOARD_ROWS = [
         [
@@ -1128,7 +1127,6 @@
         ]
       ];
 
-      // Map characters to physical KeyboardEvent.code for target highlighting
       const CHAR_TO_CODE = {
         'a': 'KeyA', 'b': 'KeyB', 'c': 'KeyC', 'd': 'KeyD', 'e': 'KeyE',
         'f': 'KeyF', 'g': 'KeyG', 'h': 'KeyH', 'i': 'KeyI', 'j': 'KeyJ',
@@ -1145,18 +1143,13 @@
 
       /* ==========================================================================
          3. WEB AUDIO API MECHANICAL SWITCH SYNTHESIZER
-         Models tactile cream/POM switch acoustics:
-         - Low-passed body thud (case resonance)
-         - Bandpass filtered noise burst (stem impact)
-         - High-frequency contact click
-         - Subtle release top-out sound on keyup
          ========================================================================== */
       class MechanicalAudioEngine {
         constructor() {
           this.ctx = null;
           this.enabled = true;
           this.volume = 0.7;
-          this.pitchOffset = 1.0; // Controlled by the 3D rotary knob!
+          this.pitchOffset = 1.0;
           this.noiseBuffer = null;
         }
 
@@ -1171,7 +1164,6 @@
           if (!AudioCtx) return;
           this.ctx = new AudioCtx();
 
-          // Pre-generate 0.25s white noise buffer for switch friction & impact bursts
           const bufferSize = this.ctx.sampleRate * 0.25;
           this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
           const data = this.noiseBuffer.getChannelData(0);
@@ -1190,10 +1182,8 @@
           masterGain.gain.setValueAtTime(this.volume * 0.85, now);
           masterGain.connect(this.ctx.destination);
 
-          // Slight organic micro-variation per keystroke
           const jitter = (0.95 + Math.random() * 0.1) * this.pitchOffset;
 
-          // Profile tuning by key size
           let bodyFreq = 195 * jitter;
           let clickFreq = 2100 * jitter;
           let decay = 0.055;
@@ -1208,7 +1198,7 @@
             decay = 0.068;
           }
 
-          // 1. Bottom-out housing "Thock" (low triangle/sine pitch drop)
+          // 1. Bottom-out housing "Thock"
           const bodyOsc = this.ctx.createOscillator();
           const bodyGain = this.ctx.createGain();
           bodyOsc.type = 'triangle';
@@ -1223,7 +1213,7 @@
           bodyOsc.start(now);
           bodyOsc.stop(now + decay + 0.005);
 
-          // 2. Tactile stem transient (bandpass filtered noise burst)
+          // 2. Tactile stem transient
           if (this.noiseBuffer) {
             const noiseSrc = this.ctx.createBufferSource();
             noiseSrc.buffer = this.noiseBuffer;
@@ -1288,12 +1278,6 @@
 
       /* ==========================================================================
          4. THREE.JS PROCEDURAL 3D KEYBOARD SCENE
-         Reproduces the reference illustration's sculptural aesthetic:
-         - Elevated three-quarter perspective
-         - Chunky cream rounded body with dark cartoon outline (#292824)
-         - Beveled ivory & orange keycaps with crisp legends
-         - Left-side physical rotary control knob
-         - Curved cream USB cable with metallic USB-A plug on the left
          ========================================================================== */
       class Keyboard3DStage {
         constructor(containerEl, fallbackEl, onVirtualKeyTrigger, onKnobRotate) {
@@ -1302,7 +1286,7 @@
           this.onVirtualKeyTrigger = onVirtualKeyTrigger;
           this.onKnobRotate = onKnobRotate;
 
-          this.keyMap = new Map(); // code -> keyController object
+          this.keyMap = new Map();
           this.interactiveMeshes = [];
           this.isWebGLAvailable = false;
           this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1311,8 +1295,12 @@
           this.boardTiltZ = 0;
           this.targetTiltX = 0;
           this.targetTiltZ = 0;
+
+          // Smooth 3D Orbit Rotation State
           this.userOrbitAzimuth = 0;
           this.userOrbitPolar = 0;
+          this.currentOrbitAzimuth = 0;
+          this.currentOrbitPolar = 0;
           this.knobAngle = 0;
 
           this.init();
@@ -1335,7 +1323,6 @@
 
           this.scene = new THREE.Scene();
 
-          // Perspective camera matching the elevated 3/4 view in the reference image
           this.camera = new THREE.PerspectiveCamera(32, width / height, 0.1, 100);
           this.updateCameraFraming(width, height);
 
@@ -1360,8 +1347,8 @@
           mainLight.shadow.mapSize.width = 2048;
           mainLight.shadow.mapSize.height = 2048;
           mainLight.shadow.camera.near = 2;
-          mainLight.shadow.camera.far = 40;
-          const d = 12;
+          mainLight.shadow.camera.far = 45;
+          const d = 13;
           mainLight.shadow.camera.left = -d;
           mainLight.shadow.camera.right = d;
           mainLight.shadow.camera.top = d;
@@ -1376,7 +1363,7 @@
           // Master group rotated slightly for the iconic three-quarter collectible angle
           this.rigGroup = new THREE.Group();
           this.keyboardGroup = new THREE.Group();
-          this.keyboardGroup.rotation.y = -0.22; // Iconic 3/4 angle
+          this.keyboardGroup.rotation.y = -0.22;
           this.keyboardGroup.rotation.x = 0.08;
           this.rigGroup.add(this.keyboardGroup);
           this.scene.add(this.rigGroup);
@@ -1392,13 +1379,13 @@
             shadowCatcher: new THREE.ShadowMaterial({ opacity: 0.28 })
           };
 
-          // Ground shadow catcher plane (casts warmburnt orange shadow)
-          const groundGeo = new THREE.PlaneGeometry(50, 50);
+          // Ground shadow catcher plane (kept stationary below the orbiting rig so shadows always look grounded)
+          const groundGeo = new THREE.PlaneGeometry(60, 60);
           const groundMesh = new THREE.Mesh(groundGeo, this.materials.shadowCatcher);
           groundMesh.rotation.x = -Math.PI / 2;
-          groundMesh.position.y = -1.05;
+          groundMesh.position.y = -1.15;
           groundMesh.receiveShadow = true;
-          this.keyboardGroup.add(groundMesh);
+          this.scene.add(groundMesh);
 
           this.buildKeyboardBody();
           this.buildRotaryKnob();
@@ -1411,7 +1398,6 @@
           requestAnimationFrame(this.animate);
         }
 
-        // Helper: creates a rounded rectangle THREE.Shape
         createRoundedRectShape(w, h, r) {
           const shape = new THREE.Shape();
           const x = -w / 2;
@@ -1429,7 +1415,6 @@
         }
 
         buildKeyboardBody() {
-          // Board dimensions based on 15u width x 5 rows
           this.unit = 0.92;
           const boardW = 15 * this.unit + 1.15;
           const boardD = 5 * this.unit + 1.15;
@@ -1447,7 +1432,6 @@
           const caseGeo = new THREE.ExtrudeGeometry(baseShape, extrudeSettings);
           caseGeo.rotateX(-Math.PI / 2);
 
-          // Taper top vertices slightly inward for that chunky retro mechanical silhouette
           const pos = caseGeo.attributes.position;
           for (let i = 0; i < pos.count; i++) {
             const py = pos.getY(i);
@@ -1464,14 +1448,12 @@
           caseMesh.receiveShadow = true;
           this.keyboardGroup.add(caseMesh);
 
-          // Dark cartoon outline hull around keyboard body
           const outlineGeo = caseGeo.clone();
           const outlineMesh = new THREE.Mesh(outlineGeo, this.materials.outline);
           outlineMesh.position.copy(caseMesh.position);
           outlineMesh.scale.set(1.022, 1.08, 1.038);
           this.keyboardGroup.add(outlineMesh);
 
-          // Recessed dark switch plate well
           const wellShape = this.createRoundedRectShape(15 * this.unit + 0.22, 5 * this.unit + 0.22, 0.32);
           const wellGeo = new THREE.ShapeGeometry(wellShape);
           wellGeo.rotateX(-Math.PI / 2);
@@ -1481,19 +1463,16 @@
         }
 
         buildRotaryKnob() {
-          // Small cream control knob on the front-left side of the keyboard casing, matching the reference
           this.knobGroup = new THREE.Group();
           const boardW = 15 * this.unit + 1.15;
           this.knobGroup.position.set(-boardW / 2 - 0.22, -0.28, 1.25);
           this.knobGroup.rotation.z = Math.PI / 2;
 
-          // Red/orange collar ring
           const collarGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.12, 24);
           const collarMat = new THREE.MeshStandardMaterial({ color: 0xC9470C, roughness: 0.6 });
           const collarMesh = new THREE.Mesh(collarGeo, collarMat);
           this.knobGroup.add(collarMesh);
 
-          // Cream knob cylinder
           const knobGeo = new THREE.CylinderGeometry(0.36, 0.38, 0.46, 28);
           const knobMesh = new THREE.Mesh(knobGeo, this.materials.cableCream);
           knobMesh.position.y = 0.22;
@@ -1502,14 +1481,12 @@
           this.interactiveMeshes.push(knobMesh);
           this.knobGroup.add(knobMesh);
 
-          // Indicator notch on knob
           const notchGeo = new THREE.BoxGeometry(0.07, 0.16, 0.22);
           const notchMesh = new THREE.Mesh(notchGeo, this.materials.outlineDark);
           notchMesh.position.set(0, 0.41, 0.14);
           knobMesh.add(notchMesh);
           this.knobCapMesh = knobMesh;
 
-          // Knob dark outline
           const knobOutline = new THREE.Mesh(knobGeo.clone(), this.materials.outline);
           knobOutline.position.copy(knobMesh.position);
           knobOutline.scale.set(1.12, 1.08, 1.12);
@@ -1519,7 +1496,6 @@
         }
 
         buildUsbCable() {
-          // Curved cream-colored cable extending from the back-left of the keyboard with a USB-A plug
           const curve = new THREE.CatmullRomCurve3([
             new THREE.Vector3(-4.2, -0.35, -2.9),
             new THREE.Vector3(-5.8, -0.45, -4.4),
@@ -1537,7 +1513,6 @@
           const cableOutline = new THREE.Mesh(tubeOutlineGeo, this.materials.outline);
           this.keyboardGroup.add(cableOutline);
 
-          // USB Plug Housing at end of cable
           const plugGroup = new THREE.Group();
           plugGroup.position.set(-9.75, -0.65, 0.85);
           plugGroup.rotation.y = -0.35;
@@ -1551,7 +1526,6 @@
           housingOutline.scale.set(1.1, 1.14, 1.08);
           plugGroup.add(housingOutline);
 
-          // Metallic USB connector tip
           const tipGeo = new THREE.BoxGeometry(0.68, 0.32, 0.72);
           const tipMesh = new THREE.Mesh(tipGeo, this.materials.metalPlug);
           tipMesh.position.set(0, -0.02, 0.95);
@@ -1563,7 +1537,6 @@
           tipOutline.scale.set(1.12, 1.18, 1.1);
           plugGroup.add(tipOutline);
 
-          // Two little rectangular holes on the USB metal tip
           const holeGeo = new THREE.BoxGeometry(0.14, 0.05, 0.22);
           const holeL = new THREE.Mesh(holeGeo, this.materials.outlineDark);
           holeL.position.set(-0.16, 0.15, 0.98);
@@ -1574,7 +1547,7 @@
           this.keyboardGroup.add(plugGroup);
         }
 
-        createKeycapTexture(label, paletteType, wUnits) {
+        createKeycapTexture(label, paletteType) {
           const canvas = document.createElement('canvas');
           canvas.width = 256;
           canvas.height = 256;
@@ -1588,16 +1561,13 @@
           const fgHex = (paletteType === 'orange' || paletteType === 'correct' || paletteType === 'error')
                         ? '#FFFDF5' : '#292824';
 
-          // Base fill
           ctx.fillStyle = bgHex;
           ctx.fillRect(0, 0, 256, 256);
 
-          // Subtle top dish highlight
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
           ctx.lineWidth = 10;
           ctx.strokeRect(18, 18, 220, 220);
 
-          // Key Legend
           ctx.fillStyle = fgHex;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -1607,7 +1577,6 @@
           ctx.font = `800 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
 
           if (label === '—') {
-            // Spacebar tactile bar icon like reference image
             ctx.fillStyle = '#FFFDF5';
             ctx.beginPath();
             ctx.roundRect(88, 118, 80, 20, 10);
@@ -1630,7 +1599,6 @@
           const startX = -(totalWidthUnits * this.unit) / 2;
           const startZ = -(totalRows * this.unit) / 2;
 
-          // Cache geometry by unit width for performance
           const geoCache = new Map();
 
           const getKeyGeo = (wUnits) => {
@@ -1652,7 +1620,6 @@
             const geo = new THREE.ExtrudeGeometry(shape, extrudeOpts);
             geo.rotateX(-Math.PI / 2);
 
-            // Sculpted keycap taper (narrower top face than skirt)
             const pos = geo.attributes.position;
             const uvs = geo.attributes.uv;
             for (let i = 0; i < pos.count; i++) {
@@ -1663,7 +1630,6 @@
                 pos.setX(i, px * 0.84);
                 pos.setZ(i, pz * 0.84);
               }
-              // Planar top-down UV projection so legends sit centered on the top dish
               uvs.setXY(i, (px / (kw * 0.92)) + 0.5, (-pz / (kd * 0.92)) + 0.5);
             }
             geo.computeVertexNormals();
@@ -1684,9 +1650,8 @@
               keyGroup.position.set(centerX, restY, centerZ);
 
               const geo = getKeyGeo(wUnits);
-              const baseTex = this.createKeycapTexture(keyDef.label, keyDef.color, wUnits);
+              const baseTex = this.createKeycapTexture(keyDef.label, keyDef.color);
 
-              const sideColor = keyDef.color === 'orange' ? 0xD9530F : 0xE5DEC9;
               const capMat = new THREE.MeshStandardMaterial({
                 map: baseTex,
                 roughness: 0.62,
@@ -1699,7 +1664,6 @@
               mesh.userData = { code: keyDef.code, keyDef };
               keyGroup.add(mesh);
 
-              // Subtle dark keycap outline
               const outlineMesh = new THREE.Mesh(geo, this.materials.outline);
               outlineMesh.scale.set(1.045, 1.06, 1.055);
               keyGroup.add(outlineMesh);
@@ -1722,7 +1686,6 @@
                 isPressed: false,
                 isHovered: false,
                 isTarget: false,
-                flashState: null,
                 flashTimer: null
               });
             });
@@ -1735,8 +1698,7 @@
           if (!keyCtrl.stateTexCache[texKey]) {
             keyCtrl.stateTexCache[texKey] = this.createKeycapTexture(
               keyCtrl.def.label,
-              texKey === 'base' ? keyCtrl.def.color : texKey,
-              keyCtrl.def.w
+              texKey === 'base' ? keyCtrl.def.color : texKey
             );
           }
           keyCtrl.material.map = keyCtrl.stateTexCache[texKey];
@@ -1754,7 +1716,6 @@
           keyCtrl.isPressed = true;
           keyCtrl.targetY = keyCtrl.restY - 0.21;
 
-          // Subtle board tilt reaction based on key position
           if (!this.reducedMotion) {
             this.targetTiltZ = -keyCtrl.group.position.x * 0.0035;
             this.targetTiltX = keyCtrl.group.position.z * 0.006;
@@ -1808,38 +1769,106 @@
           this.pointer = new THREE.Vector2();
           this.hoveredCtrl = null;
           this.activePointerCode = null;
+
+          // True 3D Orbit Drag State (distinguishes click vs drag)
+          this.isPointerDown = false;
           this.isDraggingOrbit = false;
-          this.dragStart = { x: 0, y: 0 };
+          this.pointerDownPos = { x: 0, y: 0 };
+          this.orbitStartAngles = { azimuth: 0, polar: 0 };
+          this.pendingHitObject = null;
 
           const dom = this.renderer.domElement;
 
-          const updatePointer = (e) => {
-            const rect = dom.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-            this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-            return { clientX, clientY };
+          // Safely extract finite pointer coordinates so NaN can never corrupt the 3D scene
+          const getEventCoords = (e) => {
+            let x = e.clientX;
+            let y = e.clientY;
+            if ((!Number.isFinite(x) || !Number.isFinite(y)) && e.touches && e.touches.length > 0) {
+              x = e.touches[0].clientX;
+              y = e.touches[0].clientY;
+            }
+            if ((!Number.isFinite(x) || !Number.isFinite(y)) && e.changedTouches && e.changedTouches.length > 0) {
+              x = e.changedTouches[0].clientX;
+              y = e.changedTouches[0].clientY;
+            }
+            return {
+              x: Number.isFinite(x) ? x : 0,
+              y: Number.isFinite(y) ? y : 0
+            };
           };
 
-          dom.addEventListener('pointermove', (e) => {
-            const coords = updatePointer(e);
+          const updateNormalizedPointer = (coords) => {
+            const rect = dom.getBoundingClientRect();
+            const w = Math.max(rect.width, 1);
+            const h = Math.max(rect.height, 1);
+            this.pointer.x = ((coords.x - rect.left) / w) * 2 - 1;
+            this.pointer.y = -((coords.y - rect.top) / h) * 2 + 1;
+          };
 
-            if (this.isDraggingOrbit) {
-              const dx = (coords.clientX - this.dragStart.x) * 0.005;
-              const dy = (coords.clientY - this.dragStart.y) * 0.004;
-              this.userOrbitAzimuth = Math.max(-0.35, Math.min(0.35, dx));
-              this.userOrbitPolar = Math.max(-0.2, Math.min(0.2, dy));
-              return;
+          dom.addEventListener('pointerdown', (e) => {
+            const coords = getEventCoords(e);
+            updateNormalizedPointer(coords);
+
+            this.isPointerDown = true;
+            this.isDraggingOrbit = false;
+            this.pointerDownPos = { x: coords.x, y: coords.y };
+            this.orbitStartAngles = {
+              azimuth: this.userOrbitAzimuth,
+              polar: this.userOrbitPolar
+            };
+
+            this.raycaster.setFromCamera(this.pointer, this.camera);
+            const hits = this.raycaster.intersectObjects(this.interactiveMeshes, false);
+            this.pendingHitObject = hits.length > 0 ? hits[0].object : null;
+
+            // If user clicked directly on a keycap, depress it immediately for zero-latency feel;
+            // if they move the pointer > 6px, we smoothly transition into 3D orbit rotation!
+            if (this.pendingHitObject && this.pendingHitObject.userData.code) {
+              const code = this.pendingHitObject.userData.code;
+              this.activePointerCode = code;
+              if (this.onVirtualKeyTrigger) this.onVirtualKeyTrigger(code, true);
+            }
+          });
+
+          window.addEventListener('pointermove', (e) => {
+            const coords = getEventCoords(e);
+
+            if (this.isPointerDown) {
+              const dx = coords.x - this.pointerDownPos.x;
+              const dy = coords.y - this.pointerDownPos.y;
+              const distSq = dx * dx + dy * dy;
+
+              // Once dragged more than 6 pixels, treat as a full 3D orbit drag
+              if (!this.isDraggingOrbit && distSq > 36) {
+                this.isDraggingOrbit = true;
+                // Release any keycap that was initially under the cursor when the drag started
+                if (this.activePointerCode) {
+                  if (this.onVirtualKeyTrigger) this.onVirtualKeyTrigger(this.activePointerCode, false);
+                  this.activePointerCode = null;
+                }
+                dom.style.cursor = 'grabbing';
+              }
+
+              if (this.isDraggingOrbit) {
+                const nextAzimuth = this.orbitStartAngles.azimuth + dx * 0.0085;
+                const nextPolar = this.orbitStartAngles.polar + dy * 0.0065;
+
+                // Wide, satisfying 3D inspection bounds (~75 deg left/right, ~35 deg up/down)
+                this.userOrbitAzimuth = Math.max(-1.35, Math.min(1.35, nextAzimuth));
+                this.userOrbitPolar = Math.max(-0.55, Math.min(0.65, nextPolar));
+                return;
+              }
             }
 
+            // Hover raycasting when not dragging
+            updateNormalizedPointer(coords);
             this.raycaster.setFromCamera(this.pointer, this.camera);
             const hits = this.raycaster.intersectObjects(this.interactiveMeshes, false);
 
             if (hits.length > 0) {
               const hitObj = hits[0].object;
               if (hitObj.userData.isKnob) {
-                dom.style.cursor = 'ns-resize';
+                dom.style.cursor = 'pointer';
                 return;
               }
               const code = hitObj.userData.code;
@@ -1864,36 +1893,31 @@
             }
           });
 
-          dom.addEventListener('pointerdown', (e) => {
-            const coords = updatePointer(e);
-            this.raycaster.setFromCamera(this.pointer, this.camera);
-            const hits = this.raycaster.intersectObjects(this.interactiveMeshes, false);
-
-            if (hits.length > 0) {
-              const hitObj = hits[0].object;
-              if (hitObj.userData.isKnob) {
-                this.knobAngle += Math.PI / 4;
-                if (this.knobCapMesh) this.knobCapMesh.rotation.y = this.knobAngle;
-                if (this.onKnobRotate) this.onKnobRotate();
-                return;
-              }
-              const code = hitObj.userData.code;
-              if (code) {
-                this.activePointerCode = code;
-                if (this.onVirtualKeyTrigger) this.onVirtualKeyTrigger(code, true);
-              }
-            } else {
-              this.isDraggingOrbit = true;
-              this.dragStart = coords;
-            }
-          });
-
           window.addEventListener('pointerup', () => {
+            if (!this.isPointerDown) return;
+
+            // If user clicked the rotary knob without dragging the scene, turn the knob
+            if (!this.isDraggingOrbit && this.pendingHitObject && this.pendingHitObject.userData.isKnob) {
+              this.knobAngle += Math.PI / 4;
+              if (this.knobCapMesh) this.knobCapMesh.rotation.y = this.knobAngle;
+              if (this.onKnobRotate) this.onKnobRotate();
+            }
+
             if (this.activePointerCode) {
               if (this.onVirtualKeyTrigger) this.onVirtualKeyTrigger(this.activePointerCode, false);
               this.activePointerCode = null;
             }
+
+            this.isPointerDown = false;
             this.isDraggingOrbit = false;
+            this.pendingHitObject = null;
+            dom.style.cursor = 'grab';
+          });
+
+          // Double-click anywhere on the 3D stage to smoothly reset the 3D angle
+          dom.addEventListener('dblclick', () => {
+            this.userOrbitAzimuth = 0;
+            this.userOrbitPolar = 0;
           });
 
           window.addEventListener('resize', () => this.handleResize());
@@ -1903,7 +1927,6 @@
           const aspect = width / Math.max(height, 1);
           this.camera.aspect = aspect;
 
-          // Responsive framing so the board never clips on small mobile screens
           let dist = 14.2;
           if (aspect < 1.35) dist = 17.5 / Math.max(aspect, 0.58);
           if (aspect > 2.2) dist = 13.4;
@@ -1943,12 +1966,19 @@
             ctrl.group.position.y = ctrl.currentY;
           });
 
-          // Subtle board chassis reactivity + user drag orbit
-          this.boardTiltX += (this.targetTiltX + this.userOrbitPolar - this.boardTiltX) * 0.14;
+          // Smoothly interpolate 3D orbit angles + typing micro-tilt with NaN safety
+          if (!Number.isFinite(this.userOrbitAzimuth)) this.userOrbitAzimuth = 0;
+          if (!Number.isFinite(this.userOrbitPolar)) this.userOrbitPolar = 0;
+
+          this.currentOrbitAzimuth += (this.userOrbitAzimuth - this.currentOrbitAzimuth) * 0.16;
+          this.currentOrbitPolar += (this.userOrbitPolar - this.currentOrbitPolar) * 0.16;
+
+          this.boardTiltX += (this.targetTiltX - this.boardTiltX) * 0.14;
           this.boardTiltZ += (this.targetTiltZ - this.boardTiltZ) * 0.14;
-          this.rigGroup.rotation.x = this.boardTiltX;
+
+          this.rigGroup.rotation.y = this.currentOrbitAzimuth;
+          this.rigGroup.rotation.x = this.currentOrbitPolar + this.boardTiltX;
           this.rigGroup.rotation.z = this.boardTiltZ;
-          this.rigGroup.rotation.y += (this.userOrbitAzimuth - this.rigGroup.rotation.y) * 0.12;
 
           this.renderer.render(this.scene, this.camera);
         }
@@ -1997,10 +2027,9 @@
          ========================================================================== */
       class TypingTestController {
         constructor() {
-          // State
           this.duration = 30;
           this.timeRemaining = 30;
-          this.status = 'idle'; // 'idle' | 'running' | 'finished'
+          this.status = 'idle';
           this.passageIndex = 0;
           this.passageText = '';
           this.charSpans = [];
@@ -2016,7 +2045,6 @@
           this.pressedCodes = new Set();
           this.tabPressed = false;
 
-          // DOM References
           this.passageWordsEl = document.getElementById('passage-words');
           this.passageViewportEl = document.getElementById('passage-viewport');
           this.liveTimerEl = document.getElementById('live-timer');
@@ -2027,7 +2055,6 @@
           this.nextKeyIndicatorEl = document.getElementById('next-key-indicator');
           this.hiddenInput = document.getElementById('hidden-typing-input');
 
-          // Initialize 3D Stage
           this.stage3D = new Keyboard3DStage(
             document.getElementById('keyboard-canvas-container'),
             document.getElementById('fallback-keyboard'),
@@ -2041,7 +2068,6 @@
 
         loadPassage(idx) {
           this.passageIndex = idx % PASSAGES.length;
-          // Ensure passage is long enough for 120s tests by joining two passages if needed
           const base = PASSAGES[this.passageIndex];
           const extra = PASSAGES[(this.passageIndex + 1) % PASSAGES.length];
           this.passageText = this.duration >= 60 ? `${base} ${extra}` : base;
@@ -2063,7 +2089,6 @@
           this.errorStrokes = 0;
           this.wpmSamples = [];
 
-          // Render characters
           this.passageWordsEl.innerHTML = '';
           this.passageWordsEl.style.transform = 'translateY(0px)';
           this.charSpans = [];
@@ -2091,11 +2116,9 @@
             const remaining = Math.max(0, this.duration - elapsedSec);
             this.timeRemaining = Math.ceil(remaining);
 
-            // Progress bar
             const pct = Math.min(100, (elapsedSec / this.duration) * 100);
             this.progressFillEl.style.width = `${pct}%`;
 
-            // Record WPM interval sample for consistency metric
             if (elapsedSec > 1) {
               const currentWpm = (this.correctStrokes / 5) / (elapsedSec / 60);
               this.wpmSamples.push(currentWpm);
@@ -2213,7 +2236,6 @@
             ? Math.round((this.correctStrokes / this.totalAttempted) * 100)
             : 100;
 
-          // Calculate Consistency from coefficient of variation of WPM samples
           let consistency = 96;
           if (this.wpmSamples.length > 3) {
             const mean = this.wpmSamples.reduce((a, b) => a + b, 0) / this.wpmSamples.length;
@@ -2224,11 +2246,9 @@
             }
           }
 
-          // Save to in-session history
           this.sessionHistory.unshift({ wpm: netWpm, acc: accuracy, dur: this.duration });
           if (this.sessionHistory.length > 5) this.sessionHistory.pop();
 
-          // Populate Results Modal
           document.getElementById('res-wpm').textContent = netWpm;
           document.getElementById('res-acc').textContent = `${accuracy}%`;
           document.getElementById('res-raw').textContent = rawWpm;
@@ -2297,7 +2317,6 @@
         }
 
         handleKnobTurn() {
-          // Cycle switch acoustic pitch between Deep Thock, Balanced Cream, and Crisp Clicky
           const pitches = [0.82, 1.0, 1.22];
           const names = ['Deep Thock Switch Profile', 'Balanced Cream Switch Profile', 'Crisp Tactile Switch Profile'];
           this.knobIdx = ((this.knobIdx || 0) + 1) % pitches.length;
@@ -2305,19 +2324,16 @@
           audioEngine.playPress('space');
           const hintEl = document.getElementById('stage-hint');
           if (hintEl) {
-            hintEl.textContent = `Knob tuned: ${names[this.knobIdx]}`;
+            hintEl.textContent = `Knob tuned: ${names[this.knobIdx]} • Drag to rotate in 3D`;
           }
         }
 
         bindEvents() {
-          // Document-level real physical keyboard synchronization
           window.addEventListener('keydown', (e) => {
-            // Allow standard browser shortcuts (Cmd/Ctrl + R, C, V, etc.)
             if (e.ctrlKey || e.metaKey) return;
 
             const code = e.code;
 
-            // Quick Restart combo: Tab + Enter
             if (code === 'Tab') {
               this.tabPressed = true;
             }
@@ -2328,14 +2344,12 @@
               return;
             }
 
-            // Close modals or reset on Escape
             if (code === 'Escape') {
               document.getElementById('results-modal').classList.remove('open');
               document.getElementById('about-modal').classList.remove('open');
               this.resetTestState();
             }
 
-            // Ignore held key auto-repeat for mechanical sound & duplicate depressions
             if (e.repeat) {
               if (code === 'Backspace') {
                 e.preventDefault();
@@ -2351,7 +2365,6 @@
               this.stage3D.depressKey(code);
             }
 
-            // If a modal is open, let Enter trigger "Try Again"
             const resultsModal = document.getElementById('results-modal');
             if (resultsModal.classList.contains('open')) {
               if (code === 'Enter') {
@@ -2372,10 +2385,9 @@
               return;
             }
 
-            // Process printable single characters
             if (e.key && e.key.length === 1) {
               if (code === 'Space') {
-                e.preventDefault(); // Prevent page scroll while typing
+                e.preventDefault();
               }
               this.processCharacterInput(e.key, code);
             }
@@ -2393,7 +2405,6 @@
             }
           });
 
-          // Clear stuck keys on window blur or visibility change
           const clearAllKeys = () => {
             this.pressedCodes.clear();
             this.tabPressed = false;
@@ -2404,14 +2415,12 @@
             if (document.hidden) clearAllKeys();
           });
 
-          // Focus hidden input on mobile tap of passage viewport
           this.passageViewportEl.addEventListener('click', () => {
             if (window.matchMedia('(pointer: coarse)').matches) {
               this.hiddenInput.focus();
             }
           });
 
-          // Duration Buttons (Header & Modal)
           const setDuration = (sec) => {
             this.duration = sec;
             document.querySelectorAll('.duration-btn, .modal-dur-btn').forEach((btn) => {
@@ -2428,7 +2437,6 @@
             });
           });
 
-          // Sound Toggle & Volume Slider
           const soundToggleBtn = document.getElementById('sound-toggle');
           const iconOn = document.getElementById('sound-icon-on');
           const iconOff = document.getElementById('sound-icon-off');
@@ -2449,7 +2457,6 @@
             iconOff.style.display = audioEngine.enabled ? 'none' : 'block';
           });
 
-          // Restart & New Passage Buttons
           document.getElementById('restart-btn').addEventListener('click', (e) => {
             audioEngine.playPress('mod');
             this.resetTestState();
@@ -2468,7 +2475,6 @@
             this.resetTestState();
           });
 
-          // Theme Toggle (Studio Orange <-> Espresso Dark)
           const themeBtn = document.getElementById('theme-toggle');
           const themeLabel = document.getElementById('theme-label');
           themeBtn.addEventListener('click', () => {
@@ -2484,7 +2490,6 @@
             themeBtn.blur();
           });
 
-          // Modals
           const resultsModal = document.getElementById('results-modal');
           const aboutModal = document.getElementById('about-modal');
 
@@ -2515,7 +2520,6 @@
         }
       }
 
-      // Boot application once DOM is ready
       window.addEventListener('DOMContentLoaded', () => {
         new TypingTestController();
       });
